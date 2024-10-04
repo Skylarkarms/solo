@@ -2,7 +2,10 @@ package com.skylarkarms.solo;
 
 import com.skylarkarms.concur.Executors;
 import com.skylarkarms.concur.Versioned;
-import com.skylarkarms.lambdas.*;
+import com.skylarkarms.lambdas.BinaryPredicate;
+import com.skylarkarms.lambdas.Exceptionals;
+import com.skylarkarms.lambdas.Lambdas;
+import com.skylarkarms.lambdas.Predicates;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -205,7 +208,7 @@ final class Cache<T>
         try {
             Field[] fs = onSwapped.getClass().getDeclaredFields();
             // This temporarily fixes the static default Cache creation, but if the user manages
-            // to create it's own Cache outside the library, it will fail to execute the interface.
+            // to create its own Cache outside the library, it will fail to execute the interface.
             if (fs.length == 0) return false;
             Field f = fs[0];
             f.setAccessible(true);
@@ -252,8 +255,8 @@ final class Cache<T>
     }
 
 
-    //Sources
-    //Interfaces created at runtime, that capture cache's scope.
+    // - Sources.
+    // - Interfaces created at runtime, that capture cache's scope.
     //This way the Parent's dispatcher has direct access to this memory scope.
 
     In.ForUpdater<T> getUpdater() { return getUpdater(weakSwapDispatcher); }
@@ -326,7 +329,6 @@ final class Cache<T>
                 weakSwapper
                 :
                 Boolean.FALSE.equals(Lambdas.Predicates.defaultType(excludeOut)) ?
-//                Functions.isAlwaysFalse(excludeOut) ?
                         (prev, next) -> {
                             boolean swapped = weakSwapper.test(prev, next);
                             if (swapped) {
@@ -351,7 +353,7 @@ final class Cache<T>
      * Recommended for rapid firing(spam) consumptions. <p>
      * Helps subside contentiousness as a result of rapid firing(spam). <p>
      * The second value to be consumed will trigger a background process. <p>
-     * <p> This scheduling behaviour of this background process will be affected by the according paramters.
+     * <p> This scheduling behaviour of this background process will be affected by the according parameters.
      *
      * <p> The value will enter a background thread with an integer value called "current". <p>
      * This integer is the result of an incrementAndGet CAS process, defined before Thread creation, and will serve as a version id. <p>
@@ -867,9 +869,7 @@ final class Cache<T>
         }
 
         @Override
-        public void accept(Versioned<T> versioned) {
-            core.accept(versioned);
-        }
+        public void accept(Versioned<T> versioned) { core.accept(versioned); }
     }
 
     class HierarchicalReceiver2<S> extends VersionedReceiver implements CompoundReceiver<T, S> {

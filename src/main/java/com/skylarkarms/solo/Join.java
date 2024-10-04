@@ -59,7 +59,7 @@ public class Join<T> extends Path.Impl<T> {
     /**
      * @param update:
      *              T1 = current state
-     *              S = incomming state
+     *              S = incoming state
      *              return = to replace this state
      * */
     public<S> Join(

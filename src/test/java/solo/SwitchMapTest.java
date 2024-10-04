@@ -9,7 +9,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class SwitchMapTest {
-    private static final String TAG = "SwichMapTest";
+    private static final String TAG = "SwitchMapTest";
 
     public static void main(String[] args) {
         TestUtils.setPrinterParams();

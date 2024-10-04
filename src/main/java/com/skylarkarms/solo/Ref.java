@@ -46,7 +46,7 @@ import java.util.function.Supplier;
  *         {@link Lazy#Lazy(Storage, Supplier)} constructor capable of lazily supplying a Path instance to the referent.
  *     </li>
  * </ul>
- * Again only one Path can be assigned to any given Ref.Lazy and vice-versa.
+ * Again only one Path can be assigned to any given {@link Ref.Lazy} and vice-versa.
  *
  * This Ref class will keep track of all {@link Consumer} observers added to the referenced Path.
  * Once the reference is cleared via {@link Path#deReference()}
@@ -222,7 +222,7 @@ public abstract class Ref<T>
 
         /**This method will detach all observers connected via {@link Ref} instance,
          * <p> BUT WILL NOT disassociate the reference from the owner {@link Path}.
-         * <p> For complete dissasociation use {@link #deReference()} instead.*/
+         * <p> For complete disassociation use {@link #deReference()} instead.*/
         @SuppressWarnings("unused")
         @Override
         public boolean clearObservers() {
@@ -451,7 +451,7 @@ public abstract class Ref<T>
         /**
          * Default constructor for {@link Lazy( Storage, Supplier)}
          * that retrieves a {@param modelClass} from the {@link ModelStore} in {@link Settings}
-         * by lazily initializing it, or getting it's intialized instance.
+         * by lazily initializing it, or getting its initialized instance.
          * */
         public<M extends Model> Lazy(
                 Storage storage,
@@ -498,7 +498,7 @@ public abstract class Ref<T>
 
         /**This method will detach all observers connected via {@link Ref} instance,
          * <p> BUT WILL NOT disassociate the reference from the owner {@link Path}.
-         * <p> For complete dissasociation use {@link #deReference()} instead.*/
+         * <p> For complete disassociation use {@link #deReference()} instead.*/
         @SuppressWarnings("unused")
         @Override
         public boolean clearObservers() {

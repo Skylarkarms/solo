@@ -31,3 +31,6 @@ gradle.properties
 /build/
 /shelf/
 /workspace.xml
+
+# test
+/test/java/solo/phase_sync_test

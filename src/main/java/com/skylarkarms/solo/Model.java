@@ -1,7 +1,10 @@
 package com.skylarkarms.solo;
 
 import com.skylarkarms.concur.LazyHolder;
-import com.skylarkarms.lambdas.*;
+import com.skylarkarms.lambdas.Exceptionals;
+import com.skylarkarms.lambdas.Lambdas;
+import com.skylarkarms.lambdas.Predicates;
+import com.skylarkarms.lambdas.Producer;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -158,7 +161,7 @@ public class Model extends Activators.SysActivator {
         final Activators.GenericShuttableActivator<Object, Activators.BinaryState<Object>> activator = activators.shuttable;
         final Activators.BinaryState<Object> innerActivator = activator.state;
 
-        private static final String IModel_error = "IModel must reeturn a ModelComponent non-null object";
+        private static final String IModel_error = "IModel must return a ModelComponent non-null object";
 
         @Override
         boolean sysActivate() {
@@ -223,7 +226,7 @@ public class Model extends Activators.SysActivator {
         public boolean isActive() { return activator.isActive(); }
 
         /**
-         * When a class cannot extends the Model class directly this interface
+         * When a class cannot extend the Model class directly this interface
          * facilitates the implementation of a ModelComponent.
          * <p> I know Goetz would never like this btw...
          * */
@@ -456,15 +459,15 @@ public class Model extends Activators.SysActivator {
             add(consumer,
                     Activators.GenericShuttableActivator.build(
                             new Activators.Activator() {
-                                record Touple<T, S>(T t, S s){}
-                                final Path<Touple<T, S>> res = path.switchMap(
+                                record Tuple<T, S>(T t, S s){}
+                                final Path<Tuple<T, S>> res = path.switchMap(
                                         t -> path2.map(
-                                                s -> new Touple<>(t, s)
+                                                s -> new Tuple<>(t, s)
                                         )
                                 );
-                                final Consumer<Touple<T, S>>
-                                        finalConsumer = tsTouple ->
-                                        consumer.accept(tsTouple.t, tsTouple.s);
+                                final Consumer<Tuple<T, S>>
+                                        finalConsumer = tsTuple ->
+                                        consumer.accept(tsTuple.t, tsTuple.s);
                                 @Override
                                 public boolean activate() {
                                     res.add(finalConsumer);

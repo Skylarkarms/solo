@@ -30,7 +30,7 @@ import java.util.function.Supplier;
  *  {@link #passiveGet()} This method can be used EVEN if the class is not active.
  *     </li>
  * </ul>
- * <p> The propagation speed from 'source' to this Getter is defined by the order of it's activation in relation to other source's children.
+ * <p> The propagation speed from 'source' to this Getter is defined by the order of its activation in relation to other source's children.
  * <p> To ensure a fast propagation this Getter should be:
  * <ul>
  *     <li>
@@ -40,7 +40,7 @@ import java.util.function.Supplier;
  *         The first object activated before ANY other 'source' children activation.
  *     </li>
  * </ul>
- * <p> This will ensure that this Getter is the first children in it's source register collection ({@link Path.Impl.ReceiversManager}), receiving the emission sequentially... immediately after {@link In} consumption.
+ * <p> This will ensure that this Getter is the first children in its source register collection ({@link Path.Impl.ReceiversManager}), receiving the emission sequentially... immediately after {@link In} consumption.
  * <p> This also depends on the type of {@link In.Config.Consume} being sequential (aka.: {@link In.Config.Consume#NON_CONT}).
  * <p> Any other position in the register collection will be affected by:
  * <ul>

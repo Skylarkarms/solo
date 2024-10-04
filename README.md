@@ -1,6 +1,6 @@
 # solo
 
-[latest version] = `1.0.1`
+[latest version] = `1.0.2`
 
 [dependencies]: 
    - [`io.github.skylarkarms:lambdas:1.0.2`](https://github.com/Skylarkarms/Lambdas)

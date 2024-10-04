@@ -145,8 +145,8 @@ public final class Settings {
                 models);
     }
 
-    /**index 0 = working runnables <p>
-     * index 1 = exit runnables
+    /**index 0 = working runnable <p>
+     * index 1 = exit runnable
      * */
     @SuppressWarnings("unchecked")
     public static List<Runnable>[] shutDowNow() {

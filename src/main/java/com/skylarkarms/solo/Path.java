@@ -4,7 +4,10 @@ import com.skylarkarms.concur.CopyOnWriteArray;
 import com.skylarkarms.concur.Executors;
 import com.skylarkarms.concur.LazyHolder;
 import com.skylarkarms.concur.Versioned;
-import com.skylarkarms.lambdas.*;
+import com.skylarkarms.lambdas.BinaryPredicate;
+import com.skylarkarms.lambdas.Exceptionals;
+import com.skylarkarms.lambdas.Lambdas;
+import com.skylarkarms.lambdas.Predicates;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -413,8 +416,8 @@ public abstract class Path<T>
     abstract Versioned<T> isConsumable();
 
     /**
-     * This Path can be assigned to a {@link Ref.Eager} referent, which will grant an aditional reference acces to this Path.
-     * This also allows this path to be retreived from a {@link Ref.Storage} via {@link Ref#getId()}
+     * This Path can be assigned to a {@link Ref.Eager} referent, which will grant an additional reference access to this Path.
+     * This also allows this path to be retrieved from a {@link Ref.Storage} via {@link Ref#getId()}
      * */
     public Path<T> assign(Ref.Eager<T> referent) { return assign((Ref<T>) referent); }
     abstract Path<T> assign(Ref<T> referent);
@@ -451,7 +454,7 @@ public abstract class Path<T>
      *     </li>
      *     <li>
      *  {@link #initialValue} The first value to be set to this {@link Path}.
-     *                     If the value does not meet the requirements defined by `exlcudeIn` parameter an error will be thrown.
+     *                     If the value does not meet the requirements defined by `excludeIn` parameter an error will be thrown.
      *                     If this value is null the Cache will be considered in a default initial state and observers will get emissions once a first value is finally given.
      *     </li>
      *     <li>
@@ -825,11 +828,7 @@ public abstract class Path<T>
         public <S> Path<S> map(Path.Builder<S> builder, Function<T, S> map) {
             Function<T, S> finalMap;
             if (debug_mode) {
-//                final StackTraceElement[] es = Thread.currentThread().getStackTrace();
                 finalMap = Exceptionals.exceptional(Exceptionals.DebugConfig.Token.sysDefaults(), map);
-//                finalMap = Functions.exceptionalFunction(() ->
-//                        ToStringFunction.StackPrinter.PROV.toStringAll(es)
-//                        , map);
             } else { finalMap = map; }
             return new Impl<>(
                     builder, this,
@@ -841,7 +840,6 @@ public abstract class Path<T>
         public <S> Path<S> openMap(Path.Builder<S> builder, Function<T, S> map, OnSwapped<S> onSwap, Predicates.OfBoolean.Consumer onActive) {
             boolean notSwap;
             if ((notSwap = onSwap.isDefault()) && onActive.isDefault()) {
-//            if ((notSwap = onSwap.isDefault()) && onActive.isIdentity()) {
                 return new Impl<>(builder, this, map);
             } else if (notSwap) { // no swap ... just onActive
                 return new Impl<>(
@@ -1067,10 +1065,19 @@ public abstract class Path<T>
         @Override
         Versioned<T> activate(Cache.Receiver<T> receiver, BooleanSupplier allow, BooleanSupplier onSet) {
             if (receiversManager.addReceiver(receiver, allow, onSet) == 0) {
+
+                // The sequence of events allow for on-the-fly sequential self removal of observers.
                 Versioned<T> ver = parentPropagator.backProp();
                 sysActivate();
                 onStateChange(true);
-                return ver;
+
+                // The double check allows for sequential inner state changes during
+                // calls to `onStateChange(true)`
+                if (ver == cache.localCache) return ver;
+                //Changing the order of the operations above will result in bugs:
+                // - Potential `hanged Listener` bug if self-detaching the Observer while receiving data.
+                // - Incorrect data propagation versioning when altering cache state during `onStateChange(true)`
+                else return null;
             } else return cache.isConsumable();
         }
 
@@ -1440,7 +1447,7 @@ public abstract class Path<T>
         class ReceiversManager implements Activators.State {
 
             @SuppressWarnings({"unchecked", "rawtypes"})
-            private final CopyOnWriteArray<Cache.Receiver<T>> strategies = new CopyOnWriteArray(Cache.Receiver.class);
+            private final CopyOnWriteArray<Cache.Receiver<T>> receivers = new CopyOnWriteArray(Cache.Receiver.class);
 
             private static final Cache.Receiver<?>[] defaultReceivers = new Cache.Receiver[]{Cache.Receiver.getDefault()};
 
@@ -1458,7 +1465,7 @@ public abstract class Path<T>
                         () -> {
                             Versioned<T> lateVersioned = cache.get();
                             int versions = lateVersioned.version();
-                            Cache.Receiver<T>[] strats = strategies.getSnapshot();
+                            Cache.Receiver<T>[] strats = receivers.getSnapshot();
                             int lateLength = strats.length;
                             boolean isEmpty;
                             if (
@@ -1472,7 +1479,7 @@ public abstract class Path<T>
                             for (int i = 1; i < lateLength; i++) {
                                 strats[i].accept(lateVersioned);
                             }
-                            strategies.clearSnapshot(strats);
+                            receivers.clearSnapshot(strats);
                             return versions < cache.getAsInt();
                         }
                 ) : null;
@@ -1488,7 +1495,7 @@ public abstract class Path<T>
                         () -> {
                             Cache.Receiver<T>[] subs;
                             int length;
-                            if ((length = (subs = strategies.takePlainSnpashot()).length) > 0) {
+                            if ((length = (subs = receivers.takePlainSnpashot()).length) > 0) {
                                 if (length > 1) executor.execute();
                                 subs[0].accept(cache.get());
                             }
@@ -1496,7 +1503,7 @@ public abstract class Path<T>
             }
 
             private boolean defaultActivate() {
-                Cache.Receiver<T>[] prevs = strategies.addAll(getDefArr());
+                Cache.Receiver<T>[] prevs = receivers.addAll(getDefArr());
                 assert prevs == null : "Should've been NULL!!!... = " + Arrays.toString(prevs) +
                         ",\n defArrs = " + Arrays.toString(getDefArr());
                 return true;
@@ -1504,15 +1511,15 @@ public abstract class Path<T>
 
 
             private boolean defaultDeactivate() {
-                strategies.removeAll200();
+                receivers.removeAll200();
                 return true;
             }
 
             /**@return true if this is the first item to be added*/
             boolean addReceiver(Cache.Receiver<T> receiver) {
                 assert receiver != null : " Receiver cannot be null";
-                assert !strategies.contains(receiver) : "receiver " + receiver + " already contained in: " + Arrays.toString(getSubscriberStrategies());
-                int index = strategies.add(receiver);
+                assert !receivers.contains(receiver) : "receiver " + receiver + " already contained in: " + Arrays.toString(getSubscriberStrategies());
+                int index = receivers.add(receiver);
                 boolean isFirst = index == 0;
                 if (isFirst) {
                     this.dispatcher = optional_dispatcher;
@@ -1526,8 +1533,8 @@ public abstract class Path<T>
             int addReceiver(Cache.Receiver<T> receiver, BooleanSupplier allow,
                             BooleanSupplier onSet) {
                 assert receiver != null : " Receiver cannot be null";
-                assert !strategies.contains(receiver) : "receiver " + receiver + " already contained in: " + Arrays.toString(getSubscriberStrategies());
-                int index = strategies.add(receiver, allow);
+                assert !receivers.contains(receiver) : "receiver " + receiver + " already contained in: " + Arrays.toString(getSubscriberStrategies());
+                int index = receivers.add(receiver, allow);
 
                 boolean greater;
                 if ((greater = index > -1) && onSet.getAsBoolean()) {
@@ -1543,15 +1550,15 @@ public abstract class Path<T>
 //                  then the receiver will not be removed.
 //                    Printer.out.print(Printer.green, TAG, "It will fail... true index = " + index);
 //                }
-                    strategies.contentiousRemove(receiver);
+                    receivers.contentiousRemove(receiver);
                 }
                 return -1;
             }
 
-            boolean contains(Cache.Receiver<T> receiver) { return strategies.contains(receiver); }
+            boolean contains(Cache.Receiver<T> receiver) { return receivers.contains(receiver); }
 
             boolean hardRemove30Throw(Cache.Receiver<T> receiver) {
-                boolean wasLast = strategies.hardRemove30Throw(receiver);
+                boolean wasLast = receivers.hardRemove30Throw(receiver);
                 if (wasLast) {
                     this.dispatcher = Lambdas.emptyRunnable();
                 }
@@ -1560,25 +1567,25 @@ public abstract class Path<T>
 
             /**@return true if this is the last receiver to be removed, this method is non-contentious, and it will try ONCE and not throw*/
             boolean nonContRemove(Cache.Receiver<T> strategy) {
-                boolean wasLast = strategies.nonContRemove(strategy);
+                boolean wasLast = receivers.nonContRemove(strategy);
                 if (wasLast) {
                     this.dispatcher = Lambdas.emptyRunnable();
                 }
                 return wasLast;
             }
 
-            private Cache.Receiver<T>[] getSubscriberStrategies() { return strategies.get(); }
+            private Cache.Receiver<T>[] getSubscriberStrategies() { return receivers.get(); }
 
             @Override
-            public boolean isActive() { return !strategies.isEmptyOpaque(); }
+            public boolean isActive() { return !receivers.isEmptyOpaque(); }
 
 
             @Override
             public String toString() {
-                return "StrategiesManager{" +
-                        "\n strategies = " + strategies +
+                return "ReceiversManager{" +
+                        "\n receivers = " + receivers +
                         "\n def = " + Arrays.toString(defaultReceivers) +
-                        "}StrategiesManager@" + hashCode() ;
+                        "}ReceiversManager@" + hashCode() ;
             }
         }
 
@@ -1735,7 +1742,7 @@ public abstract class Path<T>
 
 
             /**
-             * Must shutOff downstream
+             * Must shut Off downstream
              * */
             <B extends Activators.BinaryState<?>>boolean unbindActivator(Activators.GenericShuttableActivator<?, B> expect) {
                 return sysRegister.unregister(expect);
