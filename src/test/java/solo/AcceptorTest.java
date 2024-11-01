@@ -20,7 +20,7 @@ public class AcceptorTest {
 
         integerSource.consume(3);
 
-        Print.Chrono chrono = new Print.Chrono(Print.cyan);
+        Print.Timer chrono = new Print.Timer(Print.cyan);
         Consumer<Integer> observer = x -> {
             System.err.println(x);
             if (x == 10000) {

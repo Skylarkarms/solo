@@ -52,8 +52,8 @@ public class JoinTestComapredToUpdate2 {
 
     private static void iteration(Runnable next, int val) {
         int intRes = (int) Math.pow(val, 5);
-        Print.purple.print(TAG, " val = " + val + " res = " + intRes);
-        Print.Chrono chrono = new Print.Chrono(Print.yellow);
+        Print.purple.ln(TAG, " val = " + val + " res = " + intRes);
+        Print.Timer chrono = new Print.Timer(Print.yellow);
         In.Consume<Integer>
                 a = new In.Consume<>(),
                 b = new In.Consume<>(),
@@ -78,7 +78,7 @@ public class JoinTestComapredToUpdate2 {
                 if (integer == intRes) {
 //                if (integer == 3200000) {
                     chrono.elapsed();
-                    Print.red.print(TAG, "Removing this!!!!!");
+                    Print.red.ln(TAG, "Removing this!!!!!");
                     res.remove(this);
                     TestUtils.POSTPONE(
                             2000, //100 OK
@@ -126,7 +126,7 @@ public class JoinTestComapredToUpdate2 {
             }
         };
 
-        Print.blue.print(TAG, "Adding observer...");
+        Print.blue.ln(TAG, "Adding observer...");
         res.add(intsConsumer);
 
         TestUtils.POSTPONE(

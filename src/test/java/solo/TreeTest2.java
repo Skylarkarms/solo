@@ -28,25 +28,25 @@ public class TreeTest2 {
                     parent, nodeValue, forker, template, operator);
         }
 
-        void print() { Print.green.print(TAG, "FROM NODE: " + result()); }
+        void ln() { Print.green.ln(TAG, "FROM NODE: " + result()); }
     }
 
     private static final Tree.TypedStr<MyNode> str = new Tree.TypedStr<>(A, "/", MyNode::new) {
 
         @Override
         protected void onCreate(MyNode root) {
-            Print.yellow.print(TAG, "creation begins...");
+            Print.yellow.ln(TAG, "creation begins...");
             MyNode bNode = root.fork(B);
             bNode.append(C);
             MyNode dNode = root.fork(D);
             MyNode eNode = dNode.fork(E);
             eNode.append(F);
-            Print.yellow.print(TAG, "creation finish...");
+            Print.yellow.ln(TAG, "creation finish...");
         }
     };
 
     public static void main(String[] args) {
-        Consumer<String> printer = Print.purple::print;
+        Consumer<String> printer = Print.purple::ln;
         MyNode aNode = str.get(A);
         MyNode fNode = str.get(F);
 
@@ -54,69 +54,69 @@ public class TreeTest2 {
         TestUtils.POSTPONE(
                 1200,
                 () -> {
-                    Print.purple.print(TAG, "adding printer (A)...");
+                    Print.purple.ln(TAG, "adding printer (A)...");
                     aNode.add(
                             printer
                     );
                     assert str.isActive();
                 },
                 () -> {
-                    Print.purple.print(TAG, "Typed Node access...");
-                    aNode.print();
+                    Print.purple.ln(TAG, "Typed Node access...");
+                    aNode.ln();
                     assert str.isActive();
                 },
                 () -> {
-                    Print.purple.print(TAG, "removing printer (A)...");
+                    Print.purple.ln(TAG, "removing printer (A)...");
                     aNode.remove(
                             printer
                     );
                     assert !str.isActive();
                 },
                 () -> {
-                    Print.purple.print(TAG, "adding printer (F)...");
+                    Print.purple.ln(TAG, "adding printer (F)...");
                     fNode.add(
                             printer
                     );
                     assert str.isActive();
                 },
                 () -> {
-                    Print.purple.print(TAG, "accepting value to D");
+                    Print.purple.ln(TAG, "accepting value to D");
                     str.get(D).accept("D CHANGED!!!");
                 },
                 () -> {
-                    Print.purple.print(TAG, "Typed Node E access...");
-                    str.get(E).print();
+                    Print.purple.ln(TAG, "Typed Node E access...");
+                    str.get(E).ln();
                 },
                 () -> {
-                    Print.purple.print(TAG, "accepting value to B");
+                    Print.purple.ln(TAG, "accepting value to B");
                     str.get(B).accept("B CHANGED!!!");
                 },
                 () -> {
-                    Print.purple.print(TAG, "accepting value to A");
+                    Print.purple.ln(TAG, "accepting value to A");
                     str.get(A).accept("A CHANGED!!!");
                 },
                 () -> {
-                    Print.purple.print(TAG, "removing printer (F)");
+                    Print.purple.ln(TAG, "removing printer (F)");
                     fNode.remove(printer);
                     assert !str.isActive();
                 },
                 () -> {
-                    Print.purple.print(TAG, "Accepting B.2...");
+                    Print.purple.ln(TAG, "Accepting B.2...");
                     str.get(B).accept("B CHANGED AGAIN!!!");
                     assert !str.isActive();
                 },
                 () -> {
-                    Print.purple.print(TAG, "Accessing F");
-                    str.get(F).print();
+                    Print.purple.ln(TAG, "Accessing F");
+                    str.get(F).ln();
                     assert !str.isActive();
                 },
                 () -> {
-                    Print.purple.print(TAG, "connecting printer (C)");
+                    Print.purple.ln(TAG, "connecting printer (C)");
                     str.get(F).add(printer);
                     assert str.isActive();
                 },
                 () -> {
-                  Print.purple.print(TAG, "Transaction...");
+                  Print.purple.ln(TAG, "Transaction...");
                   MyNode eNode = str.transaction(
                           new Tree.Entry<>(A, "LOL... A"),
                           new Tree.Entry<>(F, "LOL... F"),
@@ -124,11 +124,11 @@ public class TreeTest2 {
                           new Tree.Entry<>(E, "LOL... E")
                   );
 
-                  eNode.print();
+                  eNode.ln();
 
                 },
                 () -> {
-                    Print.purple.print(TAG, "removing printer (C)");
+                    Print.purple.ln(TAG, "removing printer (C)");
                     str.get(F).remove(printer);
                     assert !str.isActive();
                 },

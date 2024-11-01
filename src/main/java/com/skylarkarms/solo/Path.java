@@ -34,7 +34,7 @@ import java.util.function.*;
  *
  * Each Path has an inner state managed by the class {@link Cache}
  * This Cache has 2 types of gates:
- *  * {@link BinaryPredicate} OR {@link Predicate} "excludeIN"
+ *  * {@link BinaryPredicate} OR {@link Predicate} "excludeIn"
  *  * {@link Predicate} "excludeOut"
  *
  * Where excludeIn will shield the Cache from undesired state swaps when {@code true}, while
@@ -55,7 +55,7 @@ public abstract class Path<T>
      * @param builder The Builder of type S to be processed. This is an instance of the Builder design
      *                pattern, which allows for more readable and maintainable code when dealing with multiple parameters.
      * @param <S> The type of the new state after mapping.
-     * @return A new {@link Path} representing the transformed states.
+     * @return A new 'Path' representing the transformed states.
      *
      * <p><b>Note:</b> The map function should be side-effect-free since it will retry until one of the following conditions is met:
      * <ul>
@@ -63,13 +63,12 @@ public abstract class Path<T>
      *     <li>The "excludeIn" test has determined it as unfit to change the cache's state.</li>
      *     <li>A new concurrent signal arrives first.</li>
      * </ul>
-     * <p>Set {@link Settings#debug_mode} = {@code true} to show stackTrace details on exceptions.
+     * <p>Set {@link Settings#setDebug_mode(boolean)} = {@code true} to show stackTrace details on exceptions.
      * Object capturing is allowed, as long as it is properly de-referenced (deep copy or cloned) or as long as each of its constituents
      * remain unchanged (final). In fact, some scenarios might encourage the use of object capturing (see the code example below).</p>
      *
      * <b>Example:</b>
-     * <pre>
-     * {@code
+     * <pre>{@code
      *
      *     // In this scenario we will use a static final Object called DEFAULT of type MyObject, and we will use it to prevent a value swap only when enum MyTypes.c arrives.
      *     public class SideEffectExcludeInExample {
@@ -129,11 +128,9 @@ public abstract class Path<T>
      *             Settings.shutDownNow();
      *         }
      *     }
-     * }
-     * </pre>
+     * }</pre>
      * <p>Results:</p>
-     * <pre>
-     * {@code
+     * <pre>{@code
      * accepting... a
      * MyObject[anInt=0]
      * accepting... b
@@ -141,8 +138,7 @@ public abstract class Path<T>
      * accepting... c
      * accepting... d
      * MyObject[anInt=3]
-     * }
-     * </pre>
+     * }</pre>
      */
     public abstract <S> Path<S> map(Builder<S> builder, Function<T, S> map);
 
@@ -162,7 +158,7 @@ public abstract class Path<T>
      * @param <S> the target type to map elements to.
      * @param map the mapping function to convert elements to the target type.
      * @param excludeIn the predicate to determine whether incoming signals should be excluded if true.
-     * @return a new observable {@link Path} containing the mapped element.
+     * @return a new observable 'Path' containing the mapped element.
      * @see #map(Builder, Function)
      * */
     public <S> Path<S> map(Function<T, S> map, BinaryPredicate<S> excludeIn) {
@@ -207,7 +203,7 @@ public abstract class Path<T>
      * @param map the mapping function to convert elements to the target type.
      * @param excludeOut The test that prevents outward dispatches towards other Path forks or {@link Publisher} observers if true.
      *
-     * @return a new observable {@link Path} containing the mapped element.
+     * @return a new observable 'Path' containing the mapped element.
      * @see #map(Builder, Function)
      * */
     public <S> Path<S> map(Function<T, S> map, Predicate<S> excludeOut) {
@@ -225,7 +221,7 @@ public abstract class Path<T>
      *
      * @param <S> the target type to map elements to.
      * @param map the mapping function to convert elements to the target type.
-     * @return a new observable {@link Path} containing the mapped element.
+     * @return a new observable 'Path' containing the mapped element.
      * @see #map(Builder, Function)
      * */
     public <S> Path<S> map(Function<T, S> map) { return map(Builder.getDefault(), map); }
@@ -446,8 +442,8 @@ public abstract class Path<T>
      * {@link #excludeIn}  The test that shields the {@link Path} from undesired states after applying the map function.
      *                   If the test returns true, the swapping operation will be skipped.
      *                   This test WILL NOT SUPERSEDE reference AND Object equality constraints (see {@link Objects#equals(Object, Object)}) and WILL ONLY be applied ONCE
-     *                   their references have been checked as <b>UNEQUAL</b> to the one already inside the {@link Cache}.     *         {@link #excludeIn} : a {@link BinaryPredicate} defining the exclusion test of every
-     * <p>           @params:
+     *                   their references have been checked as <b>UNEQUAL</b> to the one already inside the {@link Cache}.
+     * <p> params:
      * <p>               T1 = The current state present in this {@link Path}
      * <p>               T2 = The incoming state.
      * <p>               @return = The resulting value to swap the current state.
@@ -1289,24 +1285,29 @@ public abstract class Path<T>
                         }
                     };
                 } else {
-                    final Executors.RetryExecutor retryExecutor = Executors.RetryExecutor.get(
+                    final Executors.ScopedExecutor retryExecutor = new Executors.ScopedExecutor(
                             executor,
                             () -> {
                                 Versioned<T> versioned = cache.get();
                                 int next = versioned.version();
                                 SubscriberWrapper<T>[] subs = subscribers.get();
-                                if (next < cache.getAsInt()) return false;
-                                for (int i = 0; i < subs.length; i++) {
+
+                                final int lateLength;
+
+                                if (0 == (lateLength = subs.length)) return true; //end
+                                if (next < cache.getAsInt()) return false; // retry
+
+                                for (int i = 0; i < lateLength; i++) {
                                     subs[i].accept(versioned);
                                 }
-                                return false;
+
+                                return versioned == cache.getOpaque();
                             }
                     );
                     this.dispatcher = new VersionedExecutor(
                             cache,
                             () -> {
-                                SubscriberWrapper<T>[] subs = subscribers.get();
-                                if (subs.length > 0) {
+                                if (subscribers.get().length > 0) {
                                     retryExecutor.execute();
                                 }
                             }
@@ -1460,27 +1461,24 @@ public abstract class Path<T>
             Runnable getDispatcher() { return dispatcher; }
 
             public ReceiversManager() {
-                final Executors.RetryExecutor executor = concurrent ? Executors.RetryExecutor.get(
+                final Executors.ScopedExecutor executor = concurrent ? new Executors.ScopedExecutor(
                         Settings.getWork_executor(),
                         () -> {
                             Versioned<T> lateVersioned = cache.get();
                             int versions = lateVersioned.version();
                             Cache.Receiver<T>[] strats = receivers.getSnapshot();
-                            int lateLength = strats.length;
-                            boolean isEmpty;
-                            if (
-                                    (isEmpty = lateLength == 0)
-                                            &&
-                                            versions < cache.getAsInt()
-                            ) return true;
-                            else if (isEmpty) return false;
+                            final int lateLength;
 
-                            if (versions < cache.getAsInt()) return true;
+                            if (0 == (lateLength = strats.length)) return true; // end
+                            if (versions < cache.getAsInt()) return false; //retry;
+
                             for (int i = 1; i < lateLength; i++) {
                                 strats[i].accept(lateVersioned);
                             }
+
                             receivers.clearSnapshot(strats);
-                            return versions < cache.getAsInt();
+
+                            return versions == cache.getAsInt();
                         }
                 ) : null;
                 this.optional_dispatcher = !concurrent ?
@@ -1495,7 +1493,7 @@ public abstract class Path<T>
                         () -> {
                             Cache.Receiver<T>[] subs;
                             int length;
-                            if ((length = (subs = receivers.takePlainSnpashot()).length) > 0) {
+                            if ((length = (subs = receivers.takePlainSnapshot()).length) > 0) {
                                 if (length > 1) executor.execute();
                                 subs[0].accept(cache.get());
                             }
@@ -1653,7 +1651,7 @@ public abstract class Path<T>
                     }
                 }
 
-                static Map<Class<Object[]>, Params<?>> paramsSet = new ConcurrentHashMap<>();
+                static final Map<Class<Object[]>, Params<?>> paramsSet = new ConcurrentHashMap<>();
 
                 /**
                  * For better performance an instance should be initialized outside the arrMap operation. <p>

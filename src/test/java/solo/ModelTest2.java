@@ -21,22 +21,22 @@ public class ModelTest2 {
         In.Consume<String> aString = new In.Consume<>("Hi!! ");
 
         public void setAnInt(int anInt) {
-            Print.blue.print("|| >>>>> *** int setting: " + anInt);
+            Print.blue.ln("|| >>>>> *** int setting: " + anInt);
             this.anInt.accept(anInt);
         }
         public void setAnInt2(int anInt) {
-            Print.blue.print("int setting: " + anInt);
+            Print.blue.ln("int setting: " + anInt);
             this.anInt2.accept(anInt);
         }
         public void setAString(String message) {
-            Print.blue.print("string setting: " + message);
+            Print.blue.ln("string setting: " + message);
             this.aString.accept(message);
         }
     }
     static class ModelA extends Model.Live {
         Path<String> res = ModelZed.anInteRef.switchMap(
                 integer -> {
-                    Print.white.print("new integer = " + integer);
+                    Print.white.ln("new integer = " + integer);
                     return ModelZed.aStringRef.map(
                             s -> s.concat("\n second = " + integer)
                     );
@@ -46,13 +46,13 @@ public class ModelTest2 {
         {
             sync(
                     res,
-                    s -> Print.cyan.print(">>> PRINTING Result = " + s)
+                    s -> Print.cyan.ln(">>> PRINTING Result = " + s)
             );
         }
 
         @Override
         protected void onStateChange(boolean isActive) {
-            Print.yellow.print(" isActive? " + isActive);
+            Print.yellow.ln(" isActive? " + isActive);
         }
     }
     public static void main(String[] args) {
@@ -111,9 +111,9 @@ public class ModelTest2 {
                     Settings.deactivateModelStore();
                 }
                 , () -> {
-                    Print.red.print("Shutting down...");
+                    Print.red.ln("Shutting down...");
                 }
-                , Settings::shutDowNow
+                , Settings::shutdownNow
 
         );
 
@@ -121,6 +121,6 @@ public class ModelTest2 {
     }
 
     private static void message(String mess) {
-        Print.green.print(mess);
+        Print.green.ln(mess);
     }
 }

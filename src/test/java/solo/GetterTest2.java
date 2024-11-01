@@ -14,14 +14,14 @@ public class GetterTest2 {
 
     public static void main(String[] args) {
         TestUtils.setPrinterParams();
-        Print.yellow.print("Getter main:");
+        Print.yellow.ln("Getter main:");
         In.Consume<Integer> integerConsume = new In.Consume<>(
                 (Predicate<Integer>) Objects::isNull
         );
         Getter<Integer> integerGetter = new Getter<>(integerConsume) {
             @Override
             protected void CASAttempt(boolean success, Versioned<Integer> prev, Versioned<Integer> next) {
-                Print.yellow.print("Getter attempt:"
+                Print.yellow.ln("Getter attempt:"
                         + "\n >>> success = " + success
                         + "\n >>> prev = " + prev
                         + "\n >>> next = " + next
@@ -30,7 +30,7 @@ public class GetterTest2 {
 
             @Override
             protected void onStateChange(boolean isActive) {
-                Print.yellow.print("Getter is active = " + isActive);
+                Print.yellow.ln("Getter is active = " + isActive);
             }
         };
 
@@ -40,6 +40,6 @@ public class GetterTest2 {
 
         int res = integerGetter.get();
         assert res == 5 : "Huh? getter = " + integerGetter;
-        Settings.shutDowNow();
+        Settings.shutdownNow();
     }
 }

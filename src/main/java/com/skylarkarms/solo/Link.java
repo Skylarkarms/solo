@@ -86,7 +86,7 @@ public class Link<T>
 
     public Path<?> unbind() {
         Activators.BinaryState<?> unreg = sysRegister.unregister().state;
-        if (!unreg.isDefault()) {
+        if (unreg != null && !unreg.isDefault()) {
             assert unreg instanceof Activators.PathedBinaryState<?,?>;
             return ((Activators.PathedBinaryState<?, ?>)unreg).parent;
         } else return null;

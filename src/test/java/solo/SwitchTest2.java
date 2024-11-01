@@ -24,7 +24,7 @@ public class SwitchTest2 {
 
         {
             stringPath.add(
-                    Print.purple::print
+                    Print.purple::ln
             );
         }
     }

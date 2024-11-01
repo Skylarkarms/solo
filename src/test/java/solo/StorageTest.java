@@ -19,7 +19,7 @@ public class StorageTest {
                 )
         );
         UUID id = LiveModelB.lazyRef_0.getId();
-        Print.green.print(id);
+        Print.green.ln(id);
         Ref.Lazy<String>
                 storedLazyRef = Settings.storage.getLazyRef(id, String.class);
         storedLazyRef.add(obs);
@@ -27,7 +27,7 @@ public class StorageTest {
         Model.get(LiveModelB.class).res.remove(obs);
         assert !LiveModelB.lazyRef_0.isActive();
 
-        Settings.shutDowNow();
+        Settings.shutdownNow();
     }
 
     static class LiveModelA extends Model.Live {

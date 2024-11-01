@@ -1,8 +1,10 @@
 package utils;
 
+import com.skylarkarms.concur.Locks;
 import com.skylarkarms.print.Print;
 import com.skylarkarms.solo.Settings;
 
+import java.util.concurrent.TimeUnit;
 import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
 import java.util.function.UnaryOperator;
@@ -53,7 +55,7 @@ public class TestUtils {
 
     public static void setPrinterParams() {
         Print.setAutoFlush(true);
-//        Print.printStack(true);
+        Print.printStack(true);
     }
 
     public static void START(Runnable runnable) {
@@ -66,14 +68,17 @@ public class TestUtils {
     public static void POSTPONE(long millis, Runnable later) {
         START(
                 () -> {
-                    try {
+//                    try {
                         System.err.println("Sleeping... " + millis + " millis.");
-                        Thread.sleep(millis);
+//                        Thread.sleep(millis);
+                        Locks.robustPark(TimeUnit.MILLISECONDS, millis);
                         later.run();
-                    } catch (RuntimeException | InterruptedException | Error e) {
-                        Settings.shutDowNow();
-                        throw new RuntimeException(e);
-                    }
+//                    } catch (RuntimeException
+//                            | InterruptedException
+//                            | Error e) {
+//                        Settings.shutDowNow();
+//                        throw new RuntimeException(e);
+//                    }
                 }
         );
     }
@@ -108,7 +113,7 @@ public class TestUtils {
     public static void FINISH() {
         POSTPONE(
                 500,
-                Settings::shutDowNow
+                Settings::shutdownNow
         );
     }
 

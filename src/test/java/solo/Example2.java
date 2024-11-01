@@ -21,7 +21,7 @@ public class Example2 {
         Model.Live.get(LiveModelB.class).res.remove(obs);
         assert !LiveModelB.lazyRef_0.isActive();
 
-        Settings.shutDowNow();
+        Settings.shutdownNow();
     }
 
     static class LiveModelA extends Model.Live {

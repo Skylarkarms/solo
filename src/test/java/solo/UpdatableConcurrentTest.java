@@ -28,9 +28,9 @@ public class UpdatableConcurrentTest {
         Consumer<IntegerObject> obs = new Consumer<>() {
             @Override
             public void accept(IntegerObject anInt) {
-                Print.purple.print(anInt.i);
+                Print.purple.ln(anInt.i);
                 if (anInt.i == 1050) {
-                    Print.white.print(TAG, "DONE!!!");
+                    Print.white.ln(TAG, "DONE!!!");
                     mapped.remove(this);
                     TestUtils.POSTPONE(
                             100,
@@ -42,23 +42,23 @@ public class UpdatableConcurrentTest {
         TestUtils.POSTPONE(
                 1200,
                 () -> {
-                    Print.green.print(TAG, " adding ... (print)");
+                    Print.green.ln(TAG, " adding ... (print)");
                     mapped.add(obs);
                 },
                 () -> {
-                    Print.green.print(TAG, " concurrent update ... start");
+                    Print.green.ln(TAG, " concurrent update ... start");
                     AtomicInteger arrived = new AtomicInteger();
                     for (int i = 1; i < 21; i++) {
                         int finalI = i;
                         TestUtils.START(
                                 () -> {
-                                    Print.yellow.print(TAG, " to compute = " + finalI);
+                                    Print.yellow.ln(TAG, " to compute = " + finalI);
                                     integerUpdatable.update(
                                             integerO -> integerO.addToPrev(finalI)
                                     );
                                     int arr = arrived.incrementAndGet();
                                     if (arr == 20) {
-                                        Print.purple.print(TAG,
+                                        Print.purple.ln(TAG,
                                                 "FINISHED, final res = " +
                                                         ",\n final res = " + mappedSupplier.get()
                                         );

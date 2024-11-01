@@ -44,12 +44,12 @@ public class ModelTest4 {
 
         @Override
         protected void onStateChange(boolean isActive) {
-            Print.yellow.print(TAG + " is active? " + isActive);
+            Print.yellow.ln(TAG + " is active? " + isActive);
         }
 
         @Override
         public final void accept(String s) {
-            Print.green.print(TAG + print.concat(" := ".concat(s)));
+            Print.green.ln(TAG + print.concat(" := ".concat(s)));
         }
 
         @Override
@@ -100,9 +100,7 @@ public class ModelTest4 {
                     "\n }";
         }
     }
-    static void print(Print color, String message) {
-        color.print(message);
-    }
+    static void print(Print color, String message) { color.ln(message); }
     static String
             set = "[Setting]",
             grab = "[Grab]",

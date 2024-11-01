@@ -28,7 +28,7 @@ public class JoinTestComapredToUpdate4 {
     private static final String TAG = "JoinTestComapredToUpdate";
     public static void main(String[] args) {
         TestUtils.setPrinterParams();
-        Print.red.print(TAG, "Commencing!!!...");
+        Print.red.ln(TAG, "Commencing!!!...");
 
         retryFor(9);
     }
@@ -44,7 +44,7 @@ public class JoinTestComapredToUpdate4 {
     }
 
     private static void iteration(Runnable next) {
-        Print.Chrono chrono = new Print.Chrono(Print.yellow);
+        Print.Timer chrono = new Print.Timer(Print.yellow);
         In.Consume<Integer>
                 a = new In.Consume<>(),
                 b = new In.Consume<>(),
@@ -66,7 +66,7 @@ public class JoinTestComapredToUpdate4 {
             public void accept(Integer integer) {
                 if (integer == 160000) {
                     chrono.elapsed();
-                    Print.red.print(TAG, "Removing this!!!!!");
+                    Print.red.ln(TAG, "Removing this!!!!!");
                     res.remove(this);
 
                     TestUtils.POSTPONE(
@@ -85,7 +85,7 @@ public class JoinTestComapredToUpdate4 {
             }
         };
 
-        Print.blue.print(TAG, "Adding observer...");
+        Print.blue.ln(TAG, "Adding observer...");
         res.add(intsConsumer);
 
         TestUtils.POSTPONE(

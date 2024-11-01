@@ -15,9 +15,9 @@ public class MapExpectOutErrorTest {
         Path<Integer> path = sp.map(Integer::parseInt, (Predicate<Integer>) Objects::isNull);
 
         path.add(i -> {
-            Print.yellow.print("LOL...");
-            Print.red.print(i);
-            Settings.shutDowNow();
+            Print.yellow.ln("LOL...");
+            Print.red.ln(i);
+            Settings.shutdownNow();
         });
     }
 
@@ -25,7 +25,7 @@ public class MapExpectOutErrorTest {
         In.InStrategy.ToBooleanConsumer<String> in = In.Consume.Config.Consume.NON_CONT().apply(this);
         @Override
         protected void onStateChange(boolean isActive) {
-            Print.purple.print("isActive? " + isActive);
+            Print.purple.ln("isActive? " + isActive);
             if (isActive) in.accept("45");
         }
     }

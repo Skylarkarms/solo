@@ -165,10 +165,10 @@ public class In<T>
 
         @FunctionalInterface
         interface Strategy<S extends InStrategy> {
-            <T> S apply(Cache<T> cache, Executors.ExecutorDelayer delayer);
+            <T> S apply(Cache<T> cache, Executors.BaseExecutor delayer);
         }
         final Strategy<S> strategy;
-        final Executors.ExecutorDelayer delayer;
+        final Executors.BaseExecutor delayer;
 
         <T> S apply(Cache<T> cache) { return strategy.apply(cache, delayer); }
 
@@ -176,7 +176,7 @@ public class In<T>
 
         private Config(
                 Strategy<S> strategy,
-                Executors.ExecutorDelayer delayer
+                Executors.BaseExecutor delayer
         ) {
             this.strategy = strategy;
             this.delayer = delayer;
@@ -189,7 +189,7 @@ public class In<T>
                 extends Config<InStrategy.ToBooleanConsumer<?>> {
 
             private Consume(Type t,
-                            Executors.ExecutorDelayer delayer
+                            Executors.BaseExecutor delayer
             ) {
                 super(t, delayer);
             }
@@ -204,7 +204,7 @@ public class In<T>
             /**
              * <p>  Contentious type of entry point.
              * <p> This option will dispatch the first emission on the current Thread and subsequent emissions on a background thread defined by 'executor'.
-             * <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED}.
+             * <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED()}.
              * <p> For custom executor the {@link #CONT(Executor)} factory method should be used.
              * */
             public static final Consume CONT() { return CONT.ref; }
@@ -216,7 +216,7 @@ public class In<T>
             /**
              * <p> Contentious type of entry point.
              * <p> <b>All</b> emissions will be computed on a background thread defined by the 'executor'.
-             * <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED}.
+             * <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED()}.
              * <p> For custom executor the {@link #BACK(Executor)} factory method should be used.
              * */
             public static final Consume BACK() { return BACK.ref; }
@@ -228,7 +228,7 @@ public class In<T>
 
             /**
              * <p> Synchronized type of entry point.
-             * <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED}.
+             * <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED()}.
              * <p> For custom executor the {@link #SYNC(Executor)} factory method should be used.
              * <ul>
              *     <li> When no executor is provided (executor is null), the 'sync' strategy employs synchronized blocks to ensure
@@ -241,7 +241,7 @@ public class In<T>
              * </ul>
              * */
             public static final Consume SYNC() {return SYNC.ref; }
-            private record SYNC() {static Consume ref = new Consume(Type.sync,
+            private record SYNC() {static final Consume ref = new Consume(Type.sync,
                     Executors.getContentious(
                             Executors.UNBRIDLED()
                     )
@@ -327,7 +327,7 @@ public class In<T>
 
             @FunctionalInterface
             interface Strategy {
-                <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> tCache, Executors.ExecutorDelayer delayer);
+                <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> tCache, Executors.BaseExecutor delayer);
             }
 
             /**
@@ -345,7 +345,7 @@ public class In<T>
                         new Strategy() {
                             @Override
                             public <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> tCache,
-                                                                             Executors.ExecutorDelayer delayer
+                                                                             Executors.BaseExecutor delayer
                             ) {
                                 //We'll just ignore executor
                                 return tCache.getSource();
@@ -361,7 +361,7 @@ public class In<T>
                         new Strategy() {
                             @Override
                             public <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> tCache,
-                                                                             Executors.ExecutorDelayer delayer
+                                                                             Executors.BaseExecutor delayer
                             ) {
                                 assert delayer != null : "Must provide an executor";
                                 return tCache.getSource(delayer);
@@ -376,7 +376,7 @@ public class In<T>
                         new Strategy() {
                             @Override
                             public <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> tCache,
-                                                                             Executors.ExecutorDelayer delayer
+                                                                             Executors.BaseExecutor delayer
                             ) {
                                 assert delayer != null : "Must provide an executor";
                                 return tCache.getBackSource(delayer);
@@ -407,7 +407,7 @@ public class In<T>
                         new Strategy() {
                             @Override
                             public <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> tCache,
-                                                                             Executors.ExecutorDelayer delayer
+                                                                             Executors.BaseExecutor delayer
                             ) {
                                 final Object lock = new Object();
                                 final InStrategy.ToBooleanConsumer<T> core = tCache.getSource();
@@ -434,7 +434,7 @@ public class In<T>
                 }
 
                 @Override
-                public <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> cache, Executors.ExecutorDelayer delayer) {
+                public <T> InStrategy.ToBooleanConsumer<T> apply(Cache<T> cache, Executors.BaseExecutor delayer) {
                     return fun.apply(cache, delayer);
                 }
             }
@@ -447,7 +447,7 @@ public class In<T>
                 extends Config<InStrategy.ToBooleanConsumer.Computable<?>> {
 
             private Compute(Strategy<InStrategy.ToBooleanConsumer.Computable<?>> t,
-                            Executors.ExecutorDelayer delayer
+                            Executors.BaseExecutor delayer
             ) {
                 super(t, delayer);
             }
@@ -459,7 +459,7 @@ public class In<T>
             record base_compute() {static final Strategy<InStrategy.ToBooleanConsumer.Computable<?>> ref = new Strategy<>() {
                 @Override
                 public <T> InStrategy.ToBooleanConsumer.Computable<T> apply(
-                        Cache<T> cache, Executors.ExecutorDelayer delayer) {
+                        Cache<T> cache, Executors.BaseExecutor delayer) {
                     return cache.getComputable(delayer);
                 }
             };}
@@ -467,7 +467,7 @@ public class In<T>
 
             /**
              * <p> Loc-Free type of entry point.
-             * <p> Calls {@link Cache#getComputable(Executors.ExecutorDelayer)} with null as {@link Executors.ExecutorDelayer}.
+             * <p> Calls {@link Cache#getComputable(Executors.BaseExecutor)} with null as {@link Executors.BaseExecutor}.
              * <p> concurrent emissions will be discarded.
              * <p> computation speed {@link Callable} will be used as backpressure drop timeout.
              * */
@@ -533,20 +533,20 @@ public class In<T>
          * <p> The different Types are accessible via the static components or constructors:
          * <ul>
          *     <li>
-         *      {@link #FORTH}
+         *      {@link #FORTH()}
          *     </li>
          *     <li>
-         *      {@link #BACK}
+         *      {@link #BACK()}
          *     </li>
          * </ul>
          * */
         public static final class Update
                 extends Config<InStrategy.Updater<?>> {
 
-            Update(Type type, Executors.ExecutorDelayer delayer) { super(type, delayer); }
+            Update(Type type, Executors.BaseExecutor delayer) { super(type, delayer); }
 
             /**
-             * A Configuration of type {@link Type#back} that makes use of {@link Executors#UNBRIDLED}
+             * A Configuration of type {@link Type#back} that makes use of {@link Executors#UNBRIDLED()}
              * <p> Other configurations involve:
              * <ul>
              *     <li>
@@ -561,7 +561,7 @@ public class In<T>
              * </ul>
              * */
             public static final Update BACK() {return BACK.ref;}
-            private record BACK() {static Update ref = new Update(Type.back, Executors.getContentious(
+            private record BACK() {static final Update ref = new Update(Type.back, Executors.getContentious(
                     Executors.UNBRIDLED()
             ));}
 
@@ -575,7 +575,7 @@ public class In<T>
             }
 
             /**
-             * Will use {@link Executors#UNBRIDLED} as default {@link Executors.ExecutorDelayer.Delayer}
+             * Will use {@link Executors#UNBRIDLED()} as default {@link Executors.BaseExecutor.Delayer}
              * */
             public static Update BACK(TimeUnit unit, long duration){
                 return new Update(Type.back, Executors.getDelayer(
@@ -587,7 +587,7 @@ public class In<T>
              * A Configuration of type {@link Type#forth}.
              * */
             public static Update FORTH() {return FORTH.ref;}
-            record FORTH() {static Update ref = new Update(Type.forth, null);}
+            record FORTH() {static final Update ref = new Update(Type.forth, null);}
 
             @SuppressWarnings("unchecked")
             @Override
@@ -605,7 +605,7 @@ public class In<T>
 
             @FunctionalInterface
             interface Strategy {
-                <T> InStrategy.Updater<T> apply(Cache<T> tCache, Executors.ExecutorDelayer delayer);
+                <T> InStrategy.Updater<T> apply(Cache<T> tCache, Executors.BaseExecutor delayer);
             }
 
             /**
@@ -632,7 +632,7 @@ public class In<T>
                 back(
                         new Strategy() {
                             @Override
-                            public <T> InStrategy.Updater<T> apply(Cache<T> cache, Executors.ExecutorDelayer delayer) {
+                            public <T> InStrategy.Updater<T> apply(Cache<T> cache, Executors.BaseExecutor delayer) {
                                 return InStrategy.Updater.fromStrat(
                                         cache.getUpdater(delayer)
                                 );
@@ -649,7 +649,7 @@ public class In<T>
                 forth(
                         new Strategy() {
                             @Override
-                            public <T> InStrategy.Updater<T> apply(Cache<T> tCache, Executors.ExecutorDelayer delayer) {
+                            public <T> InStrategy.Updater<T> apply(Cache<T> tCache, Executors.BaseExecutor delayer) {
                                 assert delayer == null;
                                 return InStrategy.Updater.fromStrat(tCache.getUpdater());
                             }
@@ -661,7 +661,7 @@ public class In<T>
                 Type(Strategy strategy) { this.strategy = strategy; }
 
                 @Override
-                public <T> InStrategy.Updater<T> apply(Cache<T> cache, Executors.ExecutorDelayer delayer) {
+                public <T> InStrategy.Updater<T> apply(Cache<T> cache, Executors.BaseExecutor delayer) {
                     return strategy.apply(cache, delayer);
                 }
             }
@@ -672,7 +672,7 @@ public class In<T>
      * The `In.Consume` class serves as the entry point to the Singular reactive system.
      * <p> Entry points such as {@link Consume} handles their own backpressure relief mechanism.
      * <p> Once emissions leave these entry points, the reactive system will handle contentiousness on their own.
-     * <p> So even if these entry points are specified as being non-contentious (sequential) see {@link Config.Consume#NON_CONT},
+     * <p> So even if these entry points are specified as being non-contentious (sequential) see {@link Config.Consume#NON_CONT()},
      * the system will still be capable of supporting any type of emission from other entry point sources.
      * <p> If concurrency control is necessary, the `Source` class offers options through its different types:
      * <ul>
@@ -686,7 +686,7 @@ public class In<T>
      *         {@link Config.Consume#CONT(Executor)} OR {@link Config.Consume#CONT(Executor)} :
      *         <p> Contentious type of entry point.
      *         <p> This option will dispatch the first emission on the current Thread and subsequent emissions on a background thread defined by 'executor'.
-     *         <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED}.
+     *         <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED()}.
      *         <p> The efficiency of this option is evident, even in scenarios where sequential but consecutive emissions occur.
      *         <p> For custom executor the {@link Config.Consume#CONT(Executor)} factory method should be used.
      *     </li>
@@ -694,13 +694,13 @@ public class In<T>
      *         {@link Config.Consume#BACK()} OR {@link Config.Consume#BACK(Executor)}
      *         <p> Contentious type of entry point.
      *         <p> <b>All</b> emissions will be computed on a background thread defined by the 'executor'.
-     *         <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED}.
+     *         <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED()}.
      *         <p> For custom executor the {@link Config.Consume#BACK(Executor)} factory method should be used.
      *     </li>
      *     <li>
      *         {@link Config.Consume#SYNC()} OR {@link Config.Consume#SYNC(Executor)}
      *          <p> Synchronized type of entry point.
-     *          <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED}.
+     *          <p> By default the constructor will use the executor specified at {@link Executors#UNBRIDLED()}.
      *          <p> For custom executor the {@link Config.Consume#SYNC(Executor)} factory method should be used.
      *          <ul>
      *              <li> When no executor is provided (executor is null), the 'sync' strategy will deliver consumption calls on the
@@ -723,7 +723,7 @@ public class In<T>
         private final ToBooleanConsumer<T> consumer;
         /**
          * Defaults to {@link #Consume(Object, Config.Consume)}
-         * <p> Where {@link Config.Consume} is set to {@link Config.Consume#NON_CONT}
+         * <p> Where {@link Config.Consume} is set to {@link Config.Consume#NON_CONT()}
          * <p> This Source cannot sustain contentious emissions.
          * */
         public Consume(
@@ -740,7 +740,7 @@ public class In<T>
          *         except for the param defined in this constructor
          *     </li>
          *     <li>
-         *         'Type' = {@link Config.Consume#NON_CONT}
+         *         'Type' = {@link Config.Consume#NON_CONT()}
          *     </li>
          * </ul>
          * */
@@ -767,7 +767,7 @@ public class In<T>
          *          T 'initialValue' set to null.
          *      </li>
          *      <li>
-         *          {@link Config.Consume} 'type' set to {@link Config.Consume#NON_CONT}.
+         *          {@link Config.Consume} 'type' set to {@link Config.Consume#NON_CONT()}.
          *      </li>
          *  </ul>
          * </pre>
@@ -789,7 +789,7 @@ public class In<T>
          *          T 'initialValue' set to null.
          *      </li>
          *      <li>
-         *          {@link Config.Consume} 'type' set to {@link Config.Consume#NON_CONT}.
+         *          {@link Config.Consume} 'type' set to {@link Config.Consume#NON_CONT()}.
          *      </li>
          *  </ul>
          * </pre>
@@ -828,7 +828,7 @@ public class In<T>
         }
 
         /**
-         * Main constructor for the {@link Consume} class.
+         * Main constructor for the 'Consume' class.
          * @param builder The {@link Builder} parameter Object for constructor overloading.
          * @param config Specifies the {@link Config.Consume} of strategy to define the backpressure mechanism of this specific entry point,
          *             offering multiple degrees and types of concurrency management.
@@ -848,7 +848,7 @@ public class In<T>
          * <p><b>Default values:</b>
          * <ul>
          *      <li>
-         *          {@link Config.Consume} set to {@link Config.Consume#NON_CONT}.
+         *          {@link Config.Consume} set to {@link Config.Consume#NON_CONT()}.
          *      </li>
          *  </ul>
          * */
@@ -988,7 +988,7 @@ public class In<T>
         }
 
         /**
-         * Updates the inner state value of this {@link Update} using the provided unary operator.
+         * Updates the inner state value of this 'Update' using the provided unary operator.
          * The provided update function should not have side effects, as it may be retried
          * if update attempts fail due to thread contention.
          *
@@ -999,7 +999,7 @@ public class In<T>
         public T updateAndGet(UnaryOperator<T> update) { return strat.updateAndGet(update); }
 
         /**
-         * Updates the inner state value of this {@link Update} using the provided unary operator.
+         * Updates the inner state value of this 'Update' using the provided unary operator.
          * The provided update function should not have side effects, as it may be retried
          * if update attempts fail due to thread contention.
          *
@@ -1010,7 +1010,7 @@ public class In<T>
         public T getAndUpdate(UnaryOperator<T> update) { return strat.getAndUpdate(update); }
 
         /**
-         * Updates the inner state value of this {@link Update} using the provided unary operator.
+         * Updates the inner state value of this 'Update' using the provided unary operator.
          * The provided update function should not have side effects, as it may be retried
          * if update attempts fail due to thread contention.
          *

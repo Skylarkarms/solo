@@ -12,7 +12,7 @@ public class GetterTest {
         Print.setAutoFlush(true);
         Print.printStack(true);
     }
-    private static final IntConsumer printer = i -> Print.red.print(TAG, i);
+    private static final IntConsumer printer = i -> Print.red.ln(TAG, i);
 
     static final class VM extends Model.Live {
         public static final Ref.Lazy<Integer> combine = new Ref.Lazy<>(
@@ -60,7 +60,7 @@ public class GetterTest {
         Getter<Integer> integerGetter = new Getter<>(combine) {
             @Override
             protected void onStateChange(boolean isActive) {
-                Print.yellow.print(
+                Print.yellow.ln(
                         TAG,
                         "This getter [" + this + "]..." +
                                 "\n is active? " + isActive
@@ -105,12 +105,12 @@ public class GetterTest {
                         int res = integerGetter.get();
                         print(res);
                     } catch (Exception e) {
-                        Print.blue.print(TAG, "This should throw: " + e.getMessage() +
+                        Print.blue.ln(TAG, "This should throw: " + e.getMessage() +
                                 Print.divisor + "getter is Active? " + integerGetter.isActive() +
                                 Print.divisor + "combine is Active? " + combine.isActive()
                         );
                         vm.aAccept(20);
-                        Print.yellow.print(TAG,
+                        Print.yellow.ln(TAG,
                                 "Using passiveGet... "
                                         + integerGetter.passiveGet() // 417 690
                         );
@@ -130,7 +130,7 @@ public class GetterTest {
                             vm::aAccept
                     );
                     int res = integerGetter.passiveGet();
-                    Print.cyan.print(TAG,
+                    Print.cyan.ln(TAG,
                             "passive..."
                                     + res // 1193 400
                     );
@@ -138,16 +138,16 @@ public class GetterTest {
                     integerGetter.activate();
                     assert integerGetter.isActive();
                     int res2 = integerGetter.get();
-                    Print.yellow.print("Res = " + res2);
+                    Print.yellow.ln("Res = " + res2);
                     print(res2); // 1074 060
                 },
                 () -> {
-                    Print.green.print(TAG, "is active? " + integerGetter.isActive());
+                    Print.green.ln(TAG, "is active? " + integerGetter.isActive());
                     integerGetter.deactivate();
                     assert !integerGetter.isActive();
                     assert !combine.isActive();
                     vm.finalAssert();
-                    Print.green.print(TAG, "is active? " + integerGetter.isActive());
+                    Print.green.ln(TAG, "is active? " + integerGetter.isActive());
                 },
                 TestUtils::FINISH
 

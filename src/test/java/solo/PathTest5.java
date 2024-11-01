@@ -18,8 +18,8 @@ public class PathTest5 {
     }
     public static void main(String[] args) {
         Executor e = Settings.getWork_executor();
-        Print.purple.print(e.toString());
-        Print.green.print("work procs = " + Settings.avail_percent +
+        Print.purple.ln(e.toString());
+        Print.green.ln("work procs = " + Settings.avail_percent +
                 ",\n exit procs = " + Settings.exit_cores);
         In.Consume<Integer> integerSource = new In.Consume<>(3, In.Config.Consume.CONT());
 
@@ -38,8 +38,8 @@ public class PathTest5 {
 
         Consumer<Integer> observer = System.err::println;                                   //Red 200 000
         Consumer<Integer> observer2 = System.out::println;                                  //White 300 000
-        Consumer<Integer> observer3 = Print.green::print; //Green 400 000
-        Consumer<Integer> observer4 = Print.purple::print; //Purple 400 000
+        Consumer<Integer> observer3 = Print.green::ln; //Green 400 000
+        Consumer<Integer> observer4 = Print.purple::ln; //Purple 400 000
 
         x2Publisher.add(
                 observer
@@ -73,7 +73,7 @@ public class PathTest5 {
                             "\n Cache x4 =  " + cacheX4 +
                             "\n Cache x5 =  " + cacheX5
                     );
-                    Print.green.print(" " +
+                    Print.green.ln(" " +
                             "\n Postponed!!!... " +
                             "\n x2 =  " + x2 +
                             "\n x3 =  " + x3 +

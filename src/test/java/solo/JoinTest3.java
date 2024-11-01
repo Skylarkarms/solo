@@ -21,7 +21,7 @@ public class JoinTest3 {
     }
 
     private static void iteration(Runnable next) {
-        Print.Chrono chrono = new Print.Chrono(Print.yellow);
+        Print.Timer chrono = new Print.Timer(Print.yellow);
         In.Consume<Integer>
                 a = new In.Consume<>(),
                 b = new In.Consume<>(In.Config.Consume.CONT()),
@@ -34,10 +34,10 @@ public class JoinTest3 {
         //  a , b,  c
         // [17, 7, 12]
         Consumer<String[]> consumer = strings -> {
-            Print.yellow.print(TAG, "Strings are = " + Arrays.toString(strings));
+            Print.yellow.ln(TAG, "Strings are = " + Arrays.toString(strings));
         };
 
-        Print.blue.print(TAG, "Adding observer...");
+        Print.blue.ln(TAG, "Adding observer...");
         str.add(consumer);
 
         TestUtils.POSTPONE(

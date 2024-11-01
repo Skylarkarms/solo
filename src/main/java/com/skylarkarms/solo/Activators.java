@@ -51,6 +51,33 @@ public final class Activators {
         );
     }
 
+    record BaseActivator<T>(Publisher<T> publisher
+            , Consumer<T> mapped
+    ) implements Activator {
+        @Override
+        public boolean activate() {
+            if (publisher.contains(mapped)) return false;
+            publisher.add(mapped);
+            return publisher.contains(mapped);
+        }
+
+        @Override
+        public void deactivate() { publisher.remove(mapped); }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            BaseActivator<?> that = (BaseActivator<?>) o;
+            return Objects.equals(publisher, that.publisher) && Objects.equals(mapped, that.mapped);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(publisher, mapped);
+        }
+    }
+
     /**
      * Delivers an {@link Activator} that will not support concurrent calls to
      * {@link Activator#activate()} and/or {@link Activator#deactivate()}
@@ -63,17 +90,7 @@ public final class Activators {
     ) {
         Consumer<T> mapped = Lambdas.Identities.isIdentity(map) ?
                 (Consumer<T>) sConsumer : Consumers.map(map, sConsumer);
-        return new Activator() {
-            @Override
-            public boolean activate() {
-                if (publisher.contains(mapped)) return false;
-                publisher.add(mapped);
-                return publisher.contains(mapped);
-            }
-
-            @Override
-            public void deactivate() { publisher.remove(mapped); }
-        };
+        return new BaseActivator<>(publisher, mapped);
     }
 
     /**
@@ -117,27 +134,42 @@ public final class Activators {
         Activator setupSwitch(Executor executor) { return fun.apply(executor); }
     }
 
+    record ActivatorArray(Activator[] listeners) implements Activator{
+
+        @Override
+        public boolean activate() {
+            for (int i = 0; i < listeners.length; i++) {
+                listeners[i].activate();
+            }
+            return true;
+        }
+
+        @Override
+        public void deactivate() {
+            for (int i = listeners.length - 1; i > -1; i--) {
+                listeners[i].deactivate();
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ActivatorArray that = (ActivatorArray) o;
+            return Arrays.equals(listeners, that.listeners);
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(listeners);
+        }
+    }
+
     /**
      * Synchronizes multiple {@link SourceEntry}
      * */
     public static Activator from(Executor executor, SourceEntry... entries) {
-        final Activator[] listeners = SourceEntry.map(executor, entries);
-        return new Activator() {
-            @Override
-            public boolean activate() {
-                for (int i = 0; i < listeners.length; i++) {
-                    listeners[i].activate();
-                }
-                return true;
-            }
-
-            @Override
-            public void deactivate() {
-                for (int i = listeners.length - 1; i > -1; i--) {
-                    listeners[i].deactivate();
-                }
-            }
-        };
+        return new ActivatorArray(SourceEntry.map(executor, entries));
     }
 
     interface State {
@@ -564,7 +596,7 @@ public final class Activators {
         }
     }
 
-    public static Consumer<BinaryState<?>>
+    public static final Consumer<BinaryState<?>>
             activate = BinaryState::backProp,
             deactivate = BinaryState::deactivate;
 
@@ -815,8 +847,8 @@ public final class Activators {
 
         private final AtomicBoolean interrupt = new AtomicBoolean();
         final ConcurrentHashMap<K, V> activators = new ConcurrentHashMap<>();
-        final GenericShuttableActivator<Object, BinaryState<Object>> shuttable = new GenericShuttableActivator<Object, BinaryState<Object>>(
-                new BinaryState<>(GenericShuttableActivator.INIT){
+        final GenericShuttableActivator<Object, BinaryState<Object>> shuttable = new GenericShuttableActivator<>(
+                new BinaryState<>(GenericShuttableActivator.INIT) {
                     @Override
                     Versioned<Object> activate(BooleanSupplier allow, BooleanSupplier onSet) {
                         if (allow.getAsBoolean() && onSet.getAsBoolean()) {

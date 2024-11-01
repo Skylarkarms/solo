@@ -20,11 +20,11 @@ public class ModelTest {
         In.Consume<String> aString = new In.Consume<>("Hi!! ");
 
         public void setAnInt(int anInt) {
-            Print.blue.print("int setting: " + anInt);
+            Print.blue.ln("int setting: " + anInt);
             this.anInt.accept(anInt);
         }
         public void setAString(String message) {
-            Print.blue.print("string setting: " + message);
+            Print.blue.ln("string setting: " + message);
             this.aString.accept(message);
         }
     }
@@ -35,18 +35,18 @@ public class ModelTest {
             sync(
                     ModelZed.anInteRef,
                     ModelZed.aStringRef,
-                    (integer, s) -> Print.cyan.print(">>> sync Result = " + (s + integer))
+                    (integer, s) -> Print.cyan.ln(">>> sync Result = " + (s + integer))
             );
         }
 
         void check() {
-            Print.yellow.print("checking...");
-            integerGetter.passiveNext(Print.purple::print);
+            Print.yellow.ln("checking...");
+            integerGetter.passiveNext(Print.purple::ln);
         }
 
         @Override
         protected void onStateChange(boolean isActive) {
-            Print.yellow.print(" isActive? " + isActive);
+            Print.yellow.ln(" isActive? " + isActive);
         }
     }
     public static void main(String[] args) {
@@ -65,7 +65,7 @@ public class ModelTest {
         try {
             ma.check();
         } catch (Exception e) {
-            Print.green.print(">>>>>>>>>>> CAUGHT!!!" +
+            Print.green.ln(">>>>>>>>>>> CAUGHT!!!" +
                     "\n message = " + e.getMessage());
         }
         message("Activating...");
@@ -82,7 +82,7 @@ public class ModelTest {
         try {
             ma.check();
         } catch (Exception e) {
-            Print.green.print(">>>>>>>>>>> 2ND!!! CAUGHT!!!" +
+            Print.green.ln(">>>>>>>>>>> 2ND!!! CAUGHT!!!" +
                     "\n message = " + e.getMessage());
         }
         mz.setAString("HELLO WORLD!!!");
@@ -91,12 +91,12 @@ public class ModelTest {
         message("Deactivating...");
         Settings.deactivateModelStore();
 
-        Print.red.print("Shutting down...");
-        Settings.shutDowNow();
+        Print.red.ln("Shutting down...");
+        Settings.shutdownNow();
     }
 
     private static void message(String mess) {
-        Print.green.print(mess);
+        Print.green.ln(mess);
         LockSupport.parkNanos(Duration.ofSeconds(3).toNanos());
     }
 }

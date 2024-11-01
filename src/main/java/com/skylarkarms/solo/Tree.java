@@ -520,10 +520,8 @@ public abstract class Tree<T, N extends Tree.Node<T, N>> {
     }
 
     /**A version of "Str"(String) tree, that accepts a generic type Node: <p>
-     * EXAMPLE:
-     * <p>
-     *<pre>
-     *     {@code private static final String
+     * <b>Example:</b>
+     *<pre>{@code private static final String
      *             A = "A",
      *                 B = "B",
      *                     C = "C",
@@ -552,8 +550,7 @@ public abstract class Tree<T, N extends Tree.Node<T, N>> {
      *             MyNode eNode = dNode.fork(E);
      *                     eNode.concat(F);
      *         }
-     *     };}
-     *     </pre>
+     *     };}</pre>
      * */
     public static abstract class TypedStr<N extends Node<String, N>> extends Tree<String, N> {
 

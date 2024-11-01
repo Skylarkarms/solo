@@ -23,7 +23,7 @@ public class HelloWorld {
         In.Consume<String> hello = new In.Consume<>(HELLO);
         Path<String> world = hello.map(map);
         Supplier<String> resSupplier = world.getCache();
-        Consumer<String> observer = Print.purple::print;
+        Consumer<String> observer = Print.purple::ln;
         world.add(observer);
         assert hello.isActive();
         assert resSupplier.get().equals(RES);
@@ -37,7 +37,7 @@ public class HelloWorld {
                         Thread.sleep(1300);
                         world.remove(observer);
                         assert !hello.isActive();
-                        Settings.shutDowNow();
+                        Settings.shutdownNow();
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }

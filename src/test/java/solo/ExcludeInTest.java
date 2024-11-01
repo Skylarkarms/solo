@@ -29,35 +29,35 @@ public class ExcludeInTest {
         Path<String> B = A.map(s -> s.concat(AA), (Predicate<String>) s -> s.equals(SOLVED_2));
         Supplier<String> cache = B.getCache();
 
-        Consumer<String> obs = Print.purple::print;
+        Consumer<String> obs = Print.purple::ln;
 
         TestUtils.POSTPONE(
                 1000,
                 () -> {
-                    Print.green.print(TAG, "setting: " + AA);
+                    Print.green.ln(TAG, "setting: " + AA);
                     B.add(obs);
                     A.accept(AA);
                     check(aCache, cache, SOLVED_1);
                 },
                 () -> {
-                    Print.green.print(TAG, "setting: " + BB);
+                    Print.green.ln(TAG, "setting: " + BB);
                     A.accept(BB);
                     check(aCache, cache, SOLVED_1);
                 },
                 () -> {
-                    Print.green.print(TAG, "setting: " + CC);
+                    Print.green.ln(TAG, "setting: " + CC);
                     A.accept(CC);
                     check(aCache, cache, SOLVED_2);
                 },
                 () -> {
-                    Print.green.print(TAG, "removing: ");
+                    Print.green.ln(TAG, "removing: ");
                     B.remove(obs);
-                    Print.green.print(TAG, "setting: " + BB);
+                    Print.green.ln(TAG, "setting: " + BB);
                     A.accept(FF);
                     check(aCache, cache, SOLVED_2);
                 },
                 () -> {
-                    Print.green.print(TAG, "adding: " + obs);
+                    Print.green.ln(TAG, "adding: " + obs);
                     B.add(obs);
                     check(aCache, cache, SOLVED_3);
                 },
@@ -71,8 +71,8 @@ public class ExcludeInTest {
             String is) {
         String aRes = aCache.get();
         String res = bCache.get();
-        Print.cyan.print(TAG, "A cache = " + aRes);
-        Print.purple.print(TAG, "B cache = " + res);
+        Print.cyan.ln(TAG, "A cache = " + aRes);
+        Print.purple.ln(TAG, "B cache = " + res);
         assert res.equals(is) : "res is = " + res;
     }
 }

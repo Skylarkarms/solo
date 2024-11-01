@@ -19,7 +19,7 @@ public class OpenSwitchTest {
         In.Consume<Integer> base = new In.Consume<>();
         base.accept(4);
 
-        Print.yellow.print(TAG, Print.divisor + " base = " + base);
+        Print.yellow.ln(TAG, Print.divisor + " base = " + base);
 
         Path<Integer>
                 firstSwitch =
@@ -32,7 +32,7 @@ public class OpenSwitchTest {
 
                                     }
                             );
-                            Print.cyan.print(TAG, " " +
+                            Print.cyan.ln(TAG, " " +
                                     "\n integer = " + integer + Print.divisor + " map path = " + res + Print.divisor + "base Path = " + base);
                             return res;
                         },
@@ -44,44 +44,44 @@ public class OpenSwitchTest {
 
         Consumer<Integer> firstSwitchObs = integer ->
         {
-            Print.purple.print(">>>>>>>>>>>>>>>>>>> NUMBER >>>>>>>> || " + integer);
+            Print.purple.ln(">>>>>>>>>>>>>>>>>>> NUMBER >>>>>>>> || " + integer);
         };
         firstSwitch.add(firstSwitchObs);
 
-        Print.green.print(TAG, " >>>>>  FIRST acceptor = " + integerSource);
+        Print.green.ln(TAG, " >>>>>  FIRST acceptor = " + integerSource);
 
         POSTPONE(
                 200,
                 () -> {
-                    Print.blue.print(TAG, " >>>>>  acceptor from [3]");
+                    Print.blue.ln(TAG, " >>>>>  acceptor from [3]");
                     integerSource.accept(3); // R = 12
                 },
                 () -> {
-                    Print.blue.print(TAG, " >>>>>  acceptor from [6]");
+                    Print.blue.ln(TAG, " >>>>>  acceptor from [6]");
                     integerSource.accept(6); // R = 24
                 },
                 () -> {
-                    Print.blue.print(TAG, " >>>>>  acceptor from [9]");
+                    Print.blue.ln(TAG, " >>>>>  acceptor from [9]");
                     integerSource.accept(9); // R = 36
                 },
                 () -> {
-                    Print.blue.print(TAG, " >>>>>  acceptor from [9]");
+                    Print.blue.ln(TAG, " >>>>>  acceptor from [9]");
                     integerSource.accept(11); // R = 44
                 },
                 () -> {
-                    Print.blue.print(TAG, " >>>>>  acceptor from [9]");
+                    Print.blue.ln(TAG, " >>>>>  acceptor from [9]");
                     integerSource.accept(13); // R = 52
                 },
                 () -> {
-                    Print.blue.print(TAG, " >>>>>  acceptor from [9]");
+                    Print.blue.ln(TAG, " >>>>>  acceptor from [9]");
                     integerSource.accept(15); // R = 60
                 },
                 () -> {
-                    Print.blue.print(TAG, " >>>>>  acceptor from [9]");
+                    Print.blue.ln(TAG, " >>>>>  acceptor from [9]");
                     integerSource.accept(17); // R = 68
                 },
                 () -> {
-                    Print.yellow.print(
+                    Print.yellow.ln(
                             " " +
                                     "\n acceptor = " + integerSource +
                                     "\n firstSwitch = " + firstSwitch +
@@ -92,7 +92,7 @@ public class OpenSwitchTest {
                     POSTPONE(
                             2000,
                             () -> {
-                                Print.red.print(
+                                Print.red.ln(
                                         "AFTER removed!!: firstSwitch = " + firstSwitch +
                                                 ",\n firstSwitch is Active?? " + firstSwitch.isActive() +
                                                 Print.divisor +

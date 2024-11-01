@@ -26,7 +26,7 @@ public class SimpleJoinTest {
 
         private String[] CAS(int index, String[] s, Integer integer) {
             String converted = integer.toString();
-            Print.cyan.print("CAS:"
+            Print.cyan.ln("CAS:"
                     + "\n index = " + index
                     + "\n prev = " + Arrays.toString(s)
                     + "\n integer = " + converted
@@ -43,7 +43,7 @@ public class SimpleJoinTest {
             sync(
                     a_b,
                     strings -> {
-                        Print.yellow.print("Printing..." + Arrays.toString(strings));
+                        Print.yellow.ln("Printing..." + Arrays.toString(strings));
                     }
             );
         }
@@ -72,7 +72,7 @@ public class SimpleJoinTest {
                     acceptor(model.int_b, 5);
                 }
                 ,() -> {
-                    print(">>> Activating...");
+                    ln(">>> Activating...");
                     model.activate();
                     assert model.isActive() : model.toString();
                 }
@@ -80,24 +80,24 @@ public class SimpleJoinTest {
                     acceptor(model.int_a, 10);
                 }
                 ,() -> {
-                    print("<<< Deactivating...");
+                    ln("<<< Deactivating...");
                     model.deactivate();
                     assert !model.isActive() : model.toString();
                 }
                 ,() -> {
-                    print("<<< Fake activation...");
+                    ln("<<< Fake activation...");
                     Settings.activateModelStore();
                     assert !model.isActive() : model.toString();
                 }
                 ,() -> {
-                    print("<<< Fake deactivation...");
+                    ln("<<< Fake deactivation...");
                     Settings.deactivateModelStore();
                 }
                 ,() -> {
                     acceptor(model.int_b, 20);
                 }
                 ,() -> {
-                    print(">>> Activating...");
+                    ln(">>> Activating...");
                     model.activate();
                     assert model.isActive() : model.toString();
                 }
@@ -108,23 +108,23 @@ public class SimpleJoinTest {
                     acceptor(model.int_b, 48);
                 }
                 ,() -> {
-                    print("<<< Deactivating...");
+                    ln("<<< Deactivating...");
                     model.deactivate();
                     assert !model.isActive() : model.toString();
                 }
                 ,() -> {
-                    Settings.shutDowNow();
+                    Settings.shutdownNow();
                     TestUtils.FINISH();
                 }
         );
     }
 
     private static void acceptor(In.Consume<Integer> path, int toAccept) {
-        print("Accepting..." + toAccept);
+        ln("Accepting..." + toAccept);
         path.accept(toAccept);
     }
 
-    static void print(String action) {
-        Print.green.print("Action = " + action);
+    static void ln(String action) {
+        Print.green.ln("Action = " + action);
     }
 }

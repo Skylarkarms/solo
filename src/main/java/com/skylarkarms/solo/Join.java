@@ -204,7 +204,7 @@ public class Join<T> extends Path.Impl<T> {
          * <p> that the new mapped Object was NOT EQUAL {@link Objects#equals(Object, Object)} == {@code false}.
          * */
         public record IndexedEntry<T, S>(int index, Function<T, S> map, ToStringFunction<S> toStringFun) {
-            static Comparator<IndexedEntry<?, ?>> comparator = (o1, o2) -> o2.index - o1.index;
+            static final Comparator<IndexedEntry<?, ?>> comparator = (o1, o2) -> o2.index - o1.index;
 
             static class Stateful<T, S> {
                 S state;

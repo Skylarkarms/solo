@@ -7,9 +7,6 @@ import com.skylarkarms.lambdas.ToStringFunction;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
-
-import static com.skylarkarms.solo.Model.getDefaultBuilder;
 
 public class ModelStore<K> extends Activators.StatefulActivator {
     static class ModelSupplier<M extends Model> extends LazyHolder.Supplier<M> implements Activators.Activator {
@@ -26,11 +23,11 @@ public class ModelStore<K> extends Activators.StatefulActivator {
         public void deactivate() { activator.deactivate(); }
 
         public ModelSupplier(
-                UnaryOperator<ModelSupplier<M>.TimeoutParamBuilder> builder
+                SpinnerConfig config
                 , Model.Type type,
                 java.util.function.Supplier<M> mSupplier
         ) {
-            super(builder, mSupplier);
+            super(config, mSupplier);
             this.activator = type.activ.apply(this);
             if (type == Model.Type.guest) {
                 lazy_sync = Lambdas.Consumers.getDefaultEmpty();
@@ -41,13 +38,21 @@ public class ModelStore<K> extends Activators.StatefulActivator {
             }
         }
 
+        public ModelSupplier(
+                Consumer<TimeoutParamBuilder> params
+                , Model.Type type
+                , java.util.function.Supplier<M> mSupplier
+        ) {
+            this(SpinnerConfig.custom(params), type, mSupplier);
+        }
+
         final void sync(Activators.State state) {
             // only if {@link lazy_core}
             lazy_sync.accept(state);
         }
 
         @Override
-        protected final void onAssigned(M value) { lazy_assign.accept(value); }
+        protected final void onCreated(M value) { lazy_assign.accept(value); }
 
         @Override
         public M getAndDestroy() {
@@ -67,7 +72,8 @@ public class ModelStore<K> extends Activators.StatefulActivator {
                 java.util.function.Supplier<M> mSupplier
         ) {
             this(
-                    getDefaultBuilder()
+                    Model.globalSpinnerConfig
+//                    getDefaultBuilder()
                     , type
                     , mSupplier
             );
@@ -83,12 +89,25 @@ public class ModelStore<K> extends Activators.StatefulActivator {
 
     public <M extends Model> LazyHolder.Supplier<M> put(
             K key
-            , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
+            , Consumer<LazyHolder.TimeoutParamBuilder> paramBuilder
             , Supplier<M> supplier
     ) {
         return sysPut(
                 key
-                , paramBuilder
+                , LazyHolder.SpinnerConfig.custom(paramBuilder)
+                , Model.Type.guest
+                , supplier
+        );
+    }
+    public <M extends Model> LazyHolder.Supplier<M> put(
+            K key
+            , LazyHolder.SpinnerConfig config
+//            , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
+            , Supplier<M> supplier
+    ) {
+        return sysPut(
+                key
+                , config
                 , Model.Type.guest
                 , supplier
         );
@@ -99,34 +118,36 @@ public class ModelStore<K> extends Activators.StatefulActivator {
     ) {
         return sysPut(
                 key
-                , Lambdas.Identities.identity()
+                , Model.globalSpinnerConfig
+//                , Lambdas.Identities.identity()
                 , Model.Type.guest
                 , supplier
         );
     }
     public <M extends Model.Live> LazyHolder.Supplier<M> put(
             K key
-            , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
+            , Consumer<LazyHolder.TimeoutParamBuilder> paramBuilder
             , Model.Type type
             , Supplier<M> supplier
 
     ) {
         return sysPut(
                 key
-                , paramBuilder
+                , LazyHolder.SpinnerConfig.custom(paramBuilder)
                 , type
                 , supplier
         );
     }
     private <M extends Model> LazyHolder.Supplier<M> sysPut(
             K key
-            , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
+            , LazyHolder.SpinnerConfig config
+//            , Consumer<LazyHolder.TimeoutParamBuilder> paramBuilder
             , Model.Type type
             , Supplier<M> supplier
 
     ) {
         final ModelSupplier<M> ms = new ModelSupplier<>(
-                paramBuilder
+                config
                 , type
                 , supplier
         );
@@ -142,7 +163,8 @@ public class ModelStore<K> extends Activators.StatefulActivator {
         @SuppressWarnings("unchecked")
         public static<K> ModelEntry<K, Model> get(
                 K key
-                , UnaryOperator<LazyHolder<Model>.TimeoutParamBuilder> paramBuilder
+                , Consumer<LazyHolder.TimeoutParamBuilder> paramBuilder
+//                , UnaryOperator<LazyHolder<Model>.TimeoutParamBuilder> paramBuilder
                 , Supplier<? extends Model> supplier
         ) {
             return new ModelEntry<>(
@@ -155,7 +177,8 @@ public class ModelStore<K> extends Activators.StatefulActivator {
 
         public static<K, M extends Model.Live> ModelEntry<K, M> get(
                 K key
-                , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
+                , Consumer<LazyHolder.TimeoutParamBuilder> paramBuilder
+//                , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
                 , Model.Type type
                 , LazyHolder.Supplier<M> supplier
         ) {
@@ -168,13 +191,14 @@ public class ModelStore<K> extends Activators.StatefulActivator {
         }
 
         private ModelEntry(K key
-                , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
+                , Consumer<LazyHolder.TimeoutParamBuilder> paramBuilder
+//                , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> paramBuilder
                 , Model.Type type
                 , Supplier<M> supplier
         ) {
             super(key,
                     new ModelSupplier<>(
-                            paramBuilder
+                            LazyHolder.SpinnerConfig.custom(paramBuilder)
                             , type
                             , supplier
                     )
@@ -234,7 +258,9 @@ public class ModelStore<K> extends Activators.StatefulActivator {
     public <M extends Model> M remove(K key){
         ModelSupplier<M> ms = (ModelSupplier<M>)
                 modelStore.remove(key);
-        return Objects.requireNonNull(ms, notFoundErr.apply(key)).getAndDestroy();
+        if (ms == null) throw new NullPointerException(notFoundErr.apply(key));
+        return ms.getAndDestroy();
+//        return Objects.requireNonNull(ms, notFoundErr.apply(key)).getAndDestroy();
     }
 
     boolean terminated;
@@ -269,8 +295,9 @@ public class ModelStore<K> extends Activators.StatefulActivator {
      * */
     @SuppressWarnings("unchecked")
     public <M extends Model> M get(K key) {
-        ModelSupplier<M> ms = (ModelSupplier<M>) modelStore.get(key);
-        return Objects.requireNonNull(ms, notFoundErr.apply(key)).get();
+        final ModelSupplier<M> ms;
+        if ((ms = (ModelSupplier<M>) modelStore.get(key)) == null) throw new NullPointerException(notFoundErr.apply(key));
+        return ms.get();
     }
 
     /**
@@ -280,7 +307,8 @@ public class ModelStore<K> extends Activators.StatefulActivator {
     @SuppressWarnings("unchecked")
     public <M extends Model> LazyHolder.Supplier<M> lazyGet(K key) {
         ModelSupplier<M> ms = (ModelSupplier<M>) modelStore.get(key);
-        return Objects.requireNonNull(ms, notFoundErr.apply(key));
+        if (ms == null) throw new NullPointerException(notFoundErr.apply(key));
+        return ms;
     }
 
     public static final class Singleton extends ModelStore<Class<? extends Model>> {
@@ -310,12 +338,12 @@ public class ModelStore<K> extends Activators.StatefulActivator {
 
             private Entry(
                     Model.Type type
-                    , UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> builder
+                    , LazyHolder.SpinnerConfig config
                     , Class<M> key
                     , Supplier<M> value) {
                 super(key,
                         new ModelSupplier<>(
-                                builder
+                                config
                                 , type, value)
                 );
             }
@@ -325,7 +353,9 @@ public class ModelStore<K> extends Activators.StatefulActivator {
                     , Class<LM> key
                     , Supplier<LM> value) {
                 return new Entry<>(type,
-                        getDefaultBuilder(), key, value
+                        Model.globalSpinnerConfig
+//                        getDefaultBuilder()
+                        , key, value
                 );
             }
 
@@ -336,7 +366,7 @@ public class ModelStore<K> extends Activators.StatefulActivator {
                     Class<M> key
                     , Supplier<M> value) {
                 return new Entry<>(Model.Type.guest,
-                        getDefaultBuilder(), key, value
+                        Model.globalSpinnerConfig, key, value
                 );
             }
         }

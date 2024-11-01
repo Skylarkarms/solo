@@ -22,25 +22,25 @@ public class SwitchMapTest {
                 B.switchMap(ib ->
                         C.map(ic ->
                                 {
-                                    Print.green.print(TAG, "solving...");
+                                    Print.green.ln(TAG, "solving...");
                                     return ia * ib * ic;
                                 }
                         )));
         Supplier<Integer> resSupplier = res.getCache();
 
-        Consumer<Integer> obs = Print.purple::print;
-        Print.yellow.print(TAG, "adding..., Res = 60 (print)");
+        Consumer<Integer> obs = Print.purple::ln;
+        Print.yellow.ln(TAG, "adding..., Res = 60 (print)");
         res.add(obs);
 
         TestUtils.POSTPONE(
                 1300,
                 () -> {
-                    Print.yellow.print(TAG, "A = 10, Res = 150 (print)");
+                    Print.yellow.ln(TAG, "A = 10, Res = 150 (print)");
                     A.accept(10);
                     test(resSupplier, 150);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "removing...");
+                    Print.yellow.ln(TAG, "removing...");
                     res.remove(obs);
                 }
                 ,() -> {
@@ -50,33 +50,33 @@ public class SwitchMapTest {
                     assert !C.isActive();
                 }
                 ,() -> {
-                    Print.yellow.print(TAG, "A = 12");
+                    Print.yellow.ln(TAG, "A = 12");
                     A.accept(12);
                     test(resSupplier, 150);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "adding... (print)");
+                    Print.yellow.ln(TAG, "adding... (print)");
                     res.add(obs);
                     assert res.isActive();
                     test(resSupplier, 180);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "A = 14, R = 210 (print)");
+                    Print.yellow.ln(TAG, "A = 14, R = 210 (print)");
                     A.accept(14);
                     test(resSupplier, 210);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "B = 7, R = 490 (print)");
+                    Print.yellow.ln(TAG, "B = 7, R = 490 (print)");
                     B.accept(7);
                     test(resSupplier, 490);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "C = 9, R = 882 (print)");
+                    Print.yellow.ln(TAG, "C = 9, R = 882 (print)");
                     C.accept(9);
                     test(resSupplier, 882);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "removing...");
+                    Print.yellow.ln(TAG, "removing...");
                     res.remove(obs);
                     assert !res.isActive();
                     assert !A.isActive();
@@ -84,17 +84,17 @@ public class SwitchMapTest {
                     assert !C.isActive();
                 },
                 () -> {
-                    Print.yellow.print(TAG, "B = 2, R = 882");
+                    Print.yellow.ln(TAG, "B = 2, R = 882");
                     B.accept(2);
                     test(resSupplier, 882);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "C = 7, R = 882");
+                    Print.yellow.ln(TAG, "C = 7, R = 882");
                     C.accept(7);
                     test(resSupplier, 882);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "adding... R = 196 (print)");
+                    Print.yellow.ln(TAG, "adding... R = 196 (print)");
                     res.add(obs);
                     assert res.isActive();
                     assert A.isActive();
@@ -103,12 +103,12 @@ public class SwitchMapTest {
                     test(resSupplier, 196);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "C = 4, R = 112 (print)");
+                    Print.yellow.ln(TAG, "C = 4, R = 112 (print)");
                     C.accept(4);
                     test(resSupplier, 112);
                 },
                 () -> {
-                    Print.yellow.print(TAG, "removing...");
+                    Print.yellow.ln(TAG, "removing...");
                     res.remove(obs);
                     assert !res.isActive();
                     assert !A.isActive();
@@ -116,7 +116,7 @@ public class SwitchMapTest {
                     assert !C.isActive();
                 },
                 () -> {
-                    Print.yellow.print(TAG, "adding... (print)");
+                    Print.yellow.ln(TAG, "adding... (print)");
                     res.add(obs);
                     assert res.isActive();
                     assert A.isActive();
@@ -124,7 +124,7 @@ public class SwitchMapTest {
                     assert C.isActive();
                 },
                 () -> {
-                    Print.yellow.print(TAG, "removing...");
+                    Print.yellow.ln(TAG, "removing...");
                     res.remove(obs);
                     assert !res.isActive();
                     assert !A.isActive();

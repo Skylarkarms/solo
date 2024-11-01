@@ -36,7 +36,7 @@ public class SideEffectExcludeInExample {
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
-        Settings.shutDowNow();
+        Settings.shutdownNow();
     }
 
     record MyObject(int anInt){

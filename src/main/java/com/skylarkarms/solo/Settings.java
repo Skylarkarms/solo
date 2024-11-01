@@ -149,9 +149,9 @@ public final class Settings {
      * index 1 = exit runnable
      * */
     @SuppressWarnings("unchecked")
-    public static List<Runnable>[] shutDowNow() {
-        clearRefStorage();
+    public static List<Runnable>[] shutdownNow() {
         shutdownModelStore();
+        clearRefStorage();
         List<Runnable>[] runnables = new List[2];
         runnables[0] = new ArrayList<>();
         runnables[1] = new ArrayList<>();

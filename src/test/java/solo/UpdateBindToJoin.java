@@ -43,13 +43,14 @@ public class UpdateBindToJoin {
         }
 
         @Override
-        public void accept(String s) { Print.green.print("PRINTING result = " + s); }
+        public void accept(String s) { Print.green.ln("PRINTING result = " + s); }
 
         {
             sync(finalResult, this);
         }
     }
 
+    @SuppressWarnings("unchecked")
     static final In.Consume<number>[] numbers = new In.Consume[] {
             new In.Consume<>(number.zero)
             , new In.Consume<>(number.one)
@@ -80,60 +81,60 @@ public class UpdateBindToJoin {
         TestUtils.POSTPONE(
                 3000,
                 () -> {
-                    print(act.concat(to_pirnt) + TEST_MODEL.nan);
+                    ln(act.concat(to_pirnt) + TEST_MODEL.nan);
                     Settings.activateModelStore();
                 }
                 , () -> {
-                    print(bind.concat(to_pirnt) + number.zero);
+                    ln(bind.concat(to_pirnt) + number.zero);
                     tm.bind(numbers[0]);
                 }
                 , () -> {
-                    print(bind.concat("[repeated]"));
+                    ln(bind.concat("[repeated]"));
                     tm.bind(numbers[0]);
                 }
                 , () -> {
-                    print(set.concat(to_pirnt) + number.ten);
+                    ln(set.concat(to_pirnt) + number.ten);
                     tm.set(number.ten);
                     assert !tm.isBound() : "Should not be bound.";
                     assert tm.integerLink.isActive() : "Should still be active... connected to Join";
                 }
                 , () -> {
-                    print("Setting to source..." + number.thirteen);
+                    ln("Setting to source..." + number.thirteen);
                     numbers[0].accept(number.thirteen);
                 }
                 , () -> {
-                    print(bind.concat(to_pirnt) + numbers[0].get());
+                    ln(bind.concat(to_pirnt) + numbers[0].get());
                     tm.bind(numbers[0]);
                 }
                 , () -> {
-                    print(deact);
+                    ln(deact);
                     Settings.deactivateModelStore();
                 }
                 , () -> {
-                    print(set + number.five);
+                    ln(set + number.five);
                     tm.set(number.five);
                 }
                 , () -> {
-                    print(act.concat(to_pirnt) + number.five);
+                    ln(act.concat(to_pirnt) + number.five);
                     Settings.activateModelStore();
                 }
                 , () -> {
-                    print(bind.concat(to_pirnt) + number.three);
+                    ln(bind.concat(to_pirnt) + number.three);
                     tm.bind(numbers[3]);
                 }
                 , () -> {
-                    print(bind.concat(to_pirnt) + number.five);
+                    ln(bind.concat(to_pirnt) + number.five);
                     tm.bind(numbers[5]);
                 }
                 , () -> {
-                    print(set.concat("[to source]").concat(to_pirnt) + number.twelve);
+                    ln(set.concat("[to source]").concat(to_pirnt) + number.twelve);
                     numbers[5].accept(number.twelve);
                 }
                 , TestUtils::FINISH
         );
     }
 
-    static void print(String s) {
-        Print.white.print(TAG, s);
+    static void ln(String s) {
+        Print.white.ln(TAG, s);
     }
 }

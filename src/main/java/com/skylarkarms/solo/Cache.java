@@ -321,7 +321,7 @@ final class Cache<T>
     }
 
     In.ForUpdater<T> getUpdater(
-            Executors.ExecutorDelayer delayer
+            Executors.BaseExecutor delayer
     ) {
         assert delayer != null;
         //We need to build a custom weakSwapDispatcher...
@@ -359,13 +359,13 @@ final class Cache<T>
      * This integer is the result of an incrementAndGet CAS process, defined before Thread creation, and will serve as a version id. <p>
      * Once this integer enters the thread, a while loop will infer via volatile check,  <p>
      * whether contention was met in the process of thread creation. <p>
-     * If contention IS met, a "NOT lesser than" (!<) test will infer whether the call deserves to continue or not. <p>
-     * Finally, a compareAndSet() within {@link Cache#weakSwapDispatcher#asBoolean(Versioned, Versioned)} will break the spin lock if true. <p>
-     * else the while will re-check whether the spin should be retried... or NOT if the "not lesser than"(!<) test fails. <p>
+     * If contention IS met, a "NOT lesser than" test will infer whether the call deserves to continue or not. <p>
+     * Finally, a compareAndSet() within {@link Cache#weakSwapDispatcher} ({@link BinaryPredicate#test(Object, Object)}) will break the spin lock if true. <p>
+     * else the while will re-check whether the spin should be retried... or NOT if the "not lesser than" test fails. <p>
      * As a result, overlap from losing consumptions will force earlier consumptions to be dropped.<p>
      * */
     In.InStrategy.ToBooleanConsumer<T> getSource(
-            Executors.ExecutorDelayer wExecutor
+            Executors.BaseExecutor wExecutor
     ) {
         final AtomicInteger ver = new AtomicInteger(0);
         return excludeIn.isAlwaysFalse() ?
@@ -415,7 +415,7 @@ final class Cache<T>
      * <p> All emissions will be computed on a background thread defined by the 'executor'.
      * */
     In.InStrategy.ToBooleanConsumer<T> getBackSource(
-            Executors.ExecutorDelayer executor
+            Executors.BaseExecutor executor
     ) {
         assert executor != null;
         final AtomicInteger ver = new AtomicInteger(0);
@@ -454,15 +454,15 @@ final class Cache<T>
 
     /**
      * {@link In.Compute} type of entry point.
-     * @param executor:
-     *                <p> NON NULL = All emissions will be computed on a background thread defined by the 'executor'.
+     * @param executor
+     *                <p> NON-NULL = All emissions will be computed on a background thread defined by the 'executor'.
      *                <p> NULL = Lock-free type of entry point.
      *                <p> concurrent emissions will be discarded.
      *                <p> computation speed {@link Callable} will be used as backpressure drop timeout.
      * @return {@link In.InStrategy.ToBooleanConsumer.Computable}
      *                * */
     In.InStrategy.ToBooleanConsumer.Computable<T> getComputable(
-            Executors.ExecutorDelayer executor
+            Executors.BaseExecutor executor
     )
     {
         final AtomicInteger ver = new AtomicInteger();

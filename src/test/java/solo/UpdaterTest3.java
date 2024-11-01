@@ -52,7 +52,7 @@ public class UpdaterTest3 {
 
         Publisher<Integer> publisher = switched.getPublisher();
 
-        Print.Chrono chrono = new Print.Chrono(Print.yellow);
+        Print.Timer chrono = new Print.Timer(Print.yellow);
         Consumer<Integer> obs = new Consumer<>() {
             @Override
             public void accept(Integer i) {
@@ -132,7 +132,7 @@ public class UpdaterTest3 {
                     //final res == 21
                 },
                 () -> {
-                    Print.blue.print(TAG, " " +
+                    Print.blue.ln(TAG, " " +
                             "\n Switched = " + switched +
                             "\n Publisher = " + publisher
                     );

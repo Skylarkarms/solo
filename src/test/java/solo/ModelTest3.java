@@ -35,7 +35,7 @@ public class ModelTest3 {
         message(Print.green, mess);
     }
     private static void message(Print color, String mess) {
-        color.print(mess);
+        color.ln(mess);
         LockSupport.parkNanos(Duration.ofSeconds(3).toNanos());
     }
 }

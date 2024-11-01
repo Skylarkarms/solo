@@ -46,8 +46,23 @@ mavenPublishing {
     }
 }
 
+
 javadoc {
-    options.tags = ['implNote:a:Implementation Note:']
+
+    // Fixes javadoc 16+ NPE bug by allowing custom javadoc path override.
+    // If not set, uses default Gradle javadoc executable
+    if (project.hasProperty('javadoc_17_path')) {
+        executable = project.property('javadoc_17_path')
+    }
+
+    options.tags = [
+            'implNote:a:Implementation Note:',
+            'implSpec:a:Implementation Requirements:',
+            'apiNote:a:API Note:',
+            'param',
+            'return',
+            'throws'
+    ]
 }
 
 repositories {
@@ -55,9 +70,9 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.github.skylarkarms:lambdas:1.0.2'
-    implementation 'io.github.skylarkarms:concur:1.0.3'
-    testImplementation 'io.github.skylarkarms:print:1.0.2'
+    implementation 'io.github.skylarkarms:lambdas:1.0.3'
+    implementation 'io.github.skylarkarms:concur:1.0.6'
+    testImplementation 'io.github.skylarkarms:print:1.0.4'
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }

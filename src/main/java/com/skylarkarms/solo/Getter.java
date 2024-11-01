@@ -121,7 +121,7 @@ public class Getter<T>
     private void nonActiveException() { if (!isActive()) throw new NonActiveException(); }
 
     /**
-     * This method can only be used while {@link #isActive()} == {@code true},
+     * This method can only be used while {@link Activators.State#isActive()} == {@code true},
      * @see #passiveFirst(Consumer)
      * */
     public boolean first(Consumer<? super T> consumer) {

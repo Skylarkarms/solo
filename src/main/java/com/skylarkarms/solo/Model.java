@@ -16,30 +16,12 @@ import java.util.function.*;
  * */
 public class Model extends Activators.SysActivator {
 
-    /**
-     * @see LazyHolder#global_timeoutMillis
-     * */
-    public static long timeoutMillis = LazyHolder.global_timeoutMillis;
-    /**
-     * @see LazyHolder#global_parked_spans
-     * */
-    public static int parked_spans = LazyHolder.global_parked_spans;
+    static LazyHolder.SpinnerConfig globalSpinnerConfig = LazyHolder.SpinnerConfig.DEFAULT;
 
-    /**
-     * @see LazyHolder#global_span_reads
-     * */
-    public static int span_reads = LazyHolder.global_span_reads;
-
-    private record defaultBuilder() {static final UnaryOperator<LazyHolder<? extends Model>.TimeoutParamBuilder>
-                ref = timeoutParamBuilder -> timeoutParamBuilder.set(
-                span_reads
-                ,parked_spans
-                , timeoutMillis
-        );}
-
-    @SuppressWarnings("unchecked")
-    static<M extends Model> UnaryOperator<LazyHolder<M>.TimeoutParamBuilder> getDefaultBuilder() {
-        return (UnaryOperator<LazyHolder<M>.TimeoutParamBuilder>)(UnaryOperator<?>) defaultBuilder.ref;
+    public static synchronized void setGlobalSpinnerConfig(LazyHolder.SpinnerConfig newConfig) {
+        if (globalSpinnerConfig != LazyHolder.SpinnerConfig.DEFAULT)
+            throw new IllegalStateException("Only one set per application.");
+        globalSpinnerConfig = newConfig;
     }
 
     /**
@@ -131,7 +113,7 @@ public class Model extends Activators.SysActivator {
     }
 
     /**
-     * @see Model .
+     * See {@link Model}
      * LiveModel is part of the proactive tools of the Singular reactive system.
      *
      * This action will grant "scope coupling", this means Paths observations can be
@@ -139,12 +121,12 @@ public class Model extends Activators.SysActivator {
      * The Model class grants easy access to proactive coupling classes and/or methods such as:
      * <ul>
      *     <li>
-     *         {@link Getter} via its {@link Live#asGetter(Path)} method.
+     *         {@link Getter} via its {@link #asGetter(Path)} method.
      *         The Getter class allows the proactive access of cached values.
      *         This Getter class lifecycle will be tied to the Model's lifecycle.
      *     </li>
      *     <li>
-     *         Direct scope coupling via {@link Live#sync(Publisher, Consumer)}
+     *         Direct scope coupling via {@link #sync(Path, Consumer)}
      *         Which will connect an observer instance tied to the Model's lifecycle.
      *     </li>
      * </ul>

@@ -5,20 +5,13 @@ import com.skylarkarms.concur.Versioned;
 import com.skylarkarms.lambdas.Exceptionals;
 import com.skylarkarms.lambdas.Lambdas;
 import com.skylarkarms.lambdas.Predicates;
-import com.skylarkarms.lambdas.ToStringFunction;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 /**
  * Class that serves as object referent.
@@ -60,7 +53,7 @@ public abstract class Ref<T>
     public final boolean hasObservers() { return !observers.isEmpty(); }
 
     /**
-     * A reimplementation of the {@link Path#deReference()} method, to work directly with the {@link Ref} class
+     * A reimplementation of the super.deReference() method, to work directly with this 'Ref' class
      * */
     @Override
     public abstract boolean deReference();
@@ -87,6 +80,29 @@ public abstract class Ref<T>
 
     abstract Impl<T> getPath();
 
+    @Override
+    public String toString() {
+        return
+                "Ref{" +
+                        "\n >>> id=" + id +
+                        ",\n >>> observers [size]=" + observers.size() +
+                        "\n }";
+    }
+
+    public String toStringDetailed() {
+        String stack = es != null ?
+                ",\n >>> es=" + Exceptionals.formatStack(0, es)
+                :
+                ",\n >>> Set Settings.setDebug_mode(boolean = true) for more information";
+
+        return
+                "Ref{" +
+                        "\n >>> id=" + id +
+                        ",\n >>> observers=" + observers
+                        + stack +
+                        "\n }";
+    }
+
     public abstract boolean clearObservers();
 
     final boolean addRefObs(Consumer<? super T> observer) {
@@ -103,7 +119,7 @@ public abstract class Ref<T>
     @SuppressWarnings("unchecked")
     final boolean completeRemoval(Impl<T> removed) {
         removed.deref(this);
-        Consumer<? super T>[] clone = observers.toArray(new Consumer[observers.size()]);
+        Consumer<? super T>[] clone = observers.toArray(new Consumer[0]);
         observers.clear();
         for (Consumer<? super T> c:clone
         ) {
@@ -124,9 +140,7 @@ public abstract class Ref<T>
      * Uses the {@link Ref#Ref(Storage)}
      * with {@link Settings#storage} as default storage.
      * */
-    private Ref() {
-        this(Settings.storage);
-    }
+    private Ref() { this(Settings.storage); }
 
     String resolveStack() {
         return es == null ?
@@ -139,11 +153,7 @@ public abstract class Ref<T>
         storage.add(this);
     }
 
-    public final UUID getId() {
-        return id;
-    }
-
-    private static final String appended = "\n => From Ref@";
+    public final UUID getId() { return id; }
 
     abstract <R extends Ref<T>> R sysAlloc(Impl<T> owner);
 
@@ -306,16 +316,22 @@ public abstract class Ref<T>
             return getPath().activate(receiver, allow, onSet);
         }
 
-
         @Override
-        public String toStringDetailed() { return getConcat(Impl::toStringDetailed); }
-
-        private String getConcat(ToStringFunction<Impl<T>> toString) {
-            return toString.apply(getPath()).concat(appended).concat(String.valueOf(hashCode()));
+        public String toString() {
+            String hash = Integer.toString(hashCode());
+            return "Eager@".concat(hash).concat("{" +
+                    "\n >>> owner=" + owner +
+                    "\n >>> ref=" + super.toString().indent(3) +
+                    "\n }@").concat(hash);
         }
 
-        @Override
-        public String toString() { return getConcat(Path::toString); }
+        public String toStringDetailed() {
+            String hash = Integer.toString(hashCode());
+            return "Eager@".concat(hash).concat("{" +
+                    "\n >>> owner=" + owner.toStringDetailed().indent(3) +
+                    "\n >>> ref=" + super.toStringDetailed().indent(3) +
+                    "\n }@").concat(hash);
+        }
 
         @Override
         public Publisher<T> getPublisher(Executor executor) { return getPath().getPublisher(executor); }
@@ -449,6 +465,17 @@ public abstract class Ref<T>
         }
 
         /**
+         * @see Lazy#Lazy(com.skylarkarms.solo.Ref.Storage, com.skylarkarms.concur.LazyHolder.SpinnerConfig, java.util.function.Supplier)
+         * */
+        public<M extends Model> Lazy(
+                LazyHolder.SpinnerConfig config,
+                Class<M> modelClass,
+                Function<M, Path<T>> pathFun
+        ) {
+            this(Settings.storage, config, modelClass, pathFun);
+        }
+
+        /**
          * Default constructor for {@link Lazy( Storage, Supplier)}
          * that retrieves a {@param modelClass} from the {@link ModelStore} in {@link Settings}
          * by lazily initializing it, or getting its initialized instance.
@@ -467,6 +494,24 @@ public abstract class Ref<T>
         }
 
         /**
+         * @see Lazy#Lazy(com.skylarkarms.solo.Ref.Storage, com.skylarkarms.concur.LazyHolder.SpinnerConfig, java.util.function.Supplier)
+         * */
+        public<M extends Model> Lazy(
+                Storage storage,
+                LazyHolder.SpinnerConfig config,
+                Class<M> modelClass,
+                Function<M, Path<T>> pathFun
+        ) {
+            this(
+                    storage,
+                    config,
+                    () -> pathFun.apply(
+                            Settings.modelStore.get(modelClass)
+                    )
+            );
+        }
+
+        /**
          * Lazily supplies a {@link Path} to this reference, and the references adopts the value of the Path supplied.
          * The Path is considered assigned OR associated ({@link Path#assign(Ref)}) to this {@link Ref}.
          * Only one Ref can be assigned to one Path, or a {@link RuntimeException} will throw.
@@ -478,6 +523,26 @@ public abstract class Ref<T>
         ) {
             super(storage);
             this.pathSupplier = new LazyHolder.Supplier<>(
+                    () -> {
+                        Path<T> p = pathSupplier.get();
+                        p.assign(this);
+                        return (Impl<T>) p;
+                    }
+            );
+        }
+
+        /**
+         * Added functionality for {@link LazyHolder.SpinnerConfig}
+         * @see Lazy#Lazy(com.skylarkarms.solo.Ref.Storage, java.util.function.Supplier)
+         * */
+        public<M extends Model.Live> Lazy(
+                Storage storage,
+                LazyHolder.SpinnerConfig config,
+                Supplier<Path<T>> pathSupplier
+        ) {
+            super(storage);
+            this.pathSupplier = new LazyHolder.Supplier<>(
+                    config,
                     () -> {
                         Path<T> p = pathSupplier.get();
                         p.assign(this);
@@ -571,13 +636,21 @@ public abstract class Ref<T>
         }
 
         @Override
-        public String toStringDetailed() { return getConcat(Path::toStringDetailed); }
+        public String toString() {
+            String hash = Integer.toString(hashCode());
+            return "Lazy@".concat(hash).concat("{"+
+                    "\n >>> pathSupplier=" + pathSupplier.toString().concat(",").indent(3) +
+                    " >>> Ref=" + super.toString().indent(3) +
+                    "}@").concat(hash);
+        }
 
         @Override
-        public String toString() { return getConcat(Path::toString); }
-
-        private String getConcat(ToStringFunction<Path<T>> toString) {
-            return toString.apply(getPath()).concat(appended).concat(String.valueOf(hashCode()));
+        public String toStringDetailed() {
+            String hash = Integer.toString(hashCode());
+            return "Lazy@".concat(hash).concat("{"+
+                    "\n >>> pathSupplier =\n" + pathSupplier.toString().concat(",").indent(3) +
+                    " >>> Ref=" + super.toStringDetailed().indent(3) +
+                    "}@").concat(hash);
         }
 
         @Override

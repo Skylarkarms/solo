@@ -54,7 +54,7 @@ public class Example1 {
         );
         Supplier<User> cache = res.getCache();
 
-        Consumer<User> obs = user -> Print.green.print(TAG, user);
+        Consumer<User> obs = user -> Print.green.ln(TAG, user);
         res.add(obs);
 
         TestUtils.POSTPONE(
