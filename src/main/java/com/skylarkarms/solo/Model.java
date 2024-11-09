@@ -8,7 +8,10 @@ import com.skylarkarms.lambdas.Producer;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Model is a class designed to facilitate a structured separation of concerns.

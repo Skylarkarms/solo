@@ -85,10 +85,14 @@ public class Link<T>
     }
 
     public Path<?> unbind() {
-        Activators.BinaryState<?> unreg = sysRegister.unregister().state;
-        if (unreg != null && !unreg.isDefault()) {
-            assert unreg instanceof Activators.PathedBinaryState<?,?>;
-            return ((Activators.PathedBinaryState<?, ?>)unreg).parent;
+        Activators.GenericShuttableActivator<?, ? extends Activators.BinaryState<?>>
+                unreg;
+        if ((unreg = sysRegister.unregister()) != null) {
+            Activators.BinaryState<?> unregState = unreg.state;
+            if (unregState != null && !unregState.isDefault()) {
+                assert unregState instanceof Activators.PathedBinaryState<?,?>;
+                return ((Activators.PathedBinaryState<?, ?>)unregState).parent;
+            } else return null;
         } else return null;
     }
 
