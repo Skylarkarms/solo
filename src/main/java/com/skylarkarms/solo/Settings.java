@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 public final class Settings {
@@ -42,19 +41,9 @@ public final class Settings {
     }
 
     private record Execs() {
-        private static final ThreadFactory exitFactory = new ThreadFactory() {
-            private static final String
-                    pref = "src.main.java.singular.Settings.exitFactory[",
-                    suf = "]";
-            private final AtomicInteger version = new AtomicInteger();
-            @Override
-            public Thread newThread(Runnable r) {
-                Thread t = new Thread(r, pref.concat(String.valueOf(version.getAndIncrement())).concat(suf));
-                t.setUncaughtExceptionHandler(Executors.auto_exit_handler());
-                t.setPriority(Thread.MIN_PRIORITY);
-                return t;
-            }
-        };
+        private static final ThreadFactory
+                workFactory = Executors.cleanFactory(Thread.MAX_PRIORITY)
+                , exitFactory = Executors.cleanFactory(Thread.MIN_PRIORITY);
 
         /**Default System executors.
          * {@systemProperty def_work_executor} 70% of all available processors.
@@ -65,12 +54,16 @@ public final class Settings {
                 avail_percent,
                 true,
                 work_cores,
-                10L, TimeUnit.SECONDS),
+                10L, TimeUnit.SECONDS
+                , workFactory
+        ),
                 def_exit_executor = new Executors.ThrowableExecutor(
                         exit_cores,
                         true,
                         all_processors,
-                        10L, TimeUnit.SECONDS, exitFactory);
+                        10L, TimeUnit.SECONDS,
+                        exitFactory
+                );
 
         private static Executor
                 work_executor = def_work_executor,

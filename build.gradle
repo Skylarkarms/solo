@@ -71,12 +71,7 @@ repositories {
 
 dependencies {
     implementation 'io.github.skylarkarms:lambdas:1.0.3'
-    implementation 'io.github.skylarkarms:concur:1.0.6'
+    implementation 'io.github.skylarkarms:concur:1.0.8'
+    testImplementation 'io.github.skylarkarms:lambdaprofiler:1.0.1'
     testImplementation 'io.github.skylarkarms:print:1.0.4'
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
-}
-
-test {
-    useJUnitPlatform()
 }

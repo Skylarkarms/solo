@@ -1,10 +1,10 @@
 # solo
 
-[latest version] = `1.0.4`
+[latest version] = `1.0.5`
 
 [dependencies]: 
    - [`io.github.skylarkarms:lambdas:1.0.3`](https://github.com/Skylarkarms/Lambdas)
-   - [`io.github.skylarkarms:concur:1.0.6`](https://github.com/Skylarkarms/Concur)
+   - [`io.github.skylarkarms:concur:1.0.8`](https://github.com/Skylarkarms/Concur)
 
 
 <p align="center">

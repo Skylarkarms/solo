@@ -257,16 +257,16 @@ public class In<T>
                 );
             }
 
-            public static Consume CONT_delayed(Executor executor, TimeUnit unit, long duration) {
+            public static Consume CONT_delayed(Executor executor, long duration, TimeUnit unit) {
                 return new Consume(Type.cont,
-                        Executors.getDelayer(executor, unit, duration)
+                        Executors.getDelayer(executor, duration, unit)
                 );
             }
 
-            public static Consume CONT_delayed(TimeUnit unit, long duration) {
+            public static Consume CONT_delayed(long duration, TimeUnit unit) {
                 return CONT_delayed(
                         Executors.UNBRIDLED(),
-                        unit, duration);
+                        duration, unit);
             }
 
             /**
@@ -278,16 +278,16 @@ public class In<T>
                 );
             }
 
-            public static Consume BACK_delayed(Executor executor, TimeUnit unit, long duration) {
+            public static Consume BACK_delayed(Executor executor, long duration, TimeUnit unit) {
                 return new Consume(Type.back,
-                        Executors.getDelayer(executor, unit, duration)
+                        Executors.getDelayer(executor, duration, unit)
                 );
             }
 
-            public static Consume BACK_delayed(TimeUnit unit, long duration) {
+            public static Consume BACK_delayed(long duration, TimeUnit unit) {
                 return BACK_delayed(
                         Executors.UNBRIDLED(),
-                        unit, duration
+                        duration, unit
                 );
             }
 
@@ -300,16 +300,16 @@ public class In<T>
                 );
             }
 
-            public static Consume SYNC_delayed(Executor executor, TimeUnit unit, long duration) {
+            public static Consume SYNC_delayed(Executor executor, long duration, TimeUnit unit) {
                 return new Consume(Type.sync,
-                        Executors.getDelayer(executor, unit, duration)
+                        Executors.getDelayer(executor, duration, unit)
                 );
             }
 
-            public static Consume SYNC_delayed(TimeUnit unit, long duration) {
+            public static Consume SYNC_delayed(long duration, TimeUnit unit) {
                 return SYNC_delayed(
                         Executors.UNBRIDLED(),
-                        unit, duration
+                        duration, unit
                 );
             }
 
@@ -487,9 +487,9 @@ public class In<T>
                 );
             }
 
-            public static Compute BACK_delayed(Executor executor, TimeUnit unit, long duration) {
+            public static Compute BACK_delayed(Executor executor, long duration, TimeUnit unit) {
                 return new Compute(base_compute.ref,
-                        Executors.getDelayer(executor, unit, duration)
+                        Executors.getDelayer(executor, duration, unit)
                 );
             }
 
@@ -508,10 +508,10 @@ public class In<T>
                 );
             }
 
-            public static Compute BACK_delayed(TimeUnit unit, long duration) {
+            public static Compute BACK_delayed(long duration, TimeUnit unit) {
                 return BACK_delayed(
                         Executors.UNBRIDLED()
-                        , unit, duration
+                        , duration, unit
                 );
             }
 
@@ -553,10 +553,10 @@ public class In<T>
              *         {@link #BACK(Executor)}
              *     </li>
              *     <li>
-             *         {@link #BACK(TimeUnit, long)}
+             *         {@link #BACK(long, TimeUnit)}
              *     </li>
              *     <li>
-             *         {@link #BACK(Executor, TimeUnit, long)}
+             *         {@link #BACK(Executor, long, TimeUnit)}
              *     </li>
              * </ul>
              * */
@@ -570,17 +570,17 @@ public class In<T>
                 return new Update(Type.back, Executors.getContentious(executor));
             }
 
-            public static Update BACK(Executor executor, TimeUnit unit, long duration){
-                return new Update(Type.back, Executors.getDelayer(executor, unit, duration));
+            public static Update BACK(Executor executor, long duration, TimeUnit unit){
+                return new Update(Type.back, Executors.getDelayer(executor, duration, unit));
             }
 
             /**
-             * Will use {@link Executors#UNBRIDLED()} as default {@link Executors.BaseExecutor.Delayer}
+             * Will use {@link Executors#UNBRIDLED()} as default {@link Executors.Delayer}
              * */
-            public static Update BACK(TimeUnit unit, long duration){
+            public static Update BACK(long duration, TimeUnit unit){
                 return new Update(Type.back, Executors.getDelayer(
                         Executors.UNBRIDLED(),
-                        unit, duration));
+                        duration, unit));
             }
 
             /**

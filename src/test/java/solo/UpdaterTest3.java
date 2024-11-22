@@ -12,7 +12,10 @@ public class UpdaterTest3 {
     private static final String TAG = "UpdaterTest3";
 
     public static void main(String[] args) {
-        TestUtils.setPrinterParams();
+        TestUtils.setPrinterParams(false);
+        ProfileLambdas.purpleTimeout(TAG,
+                500
+                );
         iteration(
                 () -> iteration(
                         () -> iteration(

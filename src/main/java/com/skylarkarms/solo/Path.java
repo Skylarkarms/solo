@@ -1497,7 +1497,8 @@ public abstract class Path<T>
                                 if (length > 1) executor.execute();
                                 subs[0].accept(cache.get());
                             }
-                        };
+                        }
+                ;
             }
 
             private boolean defaultActivate() {
