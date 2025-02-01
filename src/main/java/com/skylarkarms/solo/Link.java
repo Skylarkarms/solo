@@ -19,7 +19,8 @@ public class Link<T>
 
     private Link(Builder<T> builder) { super(builder); }
 
-    public Link(UnaryOperator<Builder<T>> builder) { super(builder); }
+    public Link(Consumer<Builder<T>> builder) { super(builder); }
+//    public Link(UnaryOperator<Builder<T>> builder) { super(builder); }
 
     public Link(T initialValue) { this(Builder.withValue(initialValue)); }
 
@@ -47,8 +48,8 @@ public class Link<T>
                         cache.hierarchicalIdentity()
                         , getResetter(
                         () -> {
-                            final Versioned<T> nextV;
-                            return (nextV = path.isConsumable()) != null ? nextV.value() : null;
+                            final Versioned<T> nextV = path.isConsumable();
+                            return nextV != null ? nextV.value() : null;
                         }
                 )
                 ));

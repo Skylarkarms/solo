@@ -1,31 +1,17 @@
 package com.skylarkarms.solo;
 
 import com.skylarkarms.concur.LazyHolder;
-import com.skylarkarms.lambdas.Exceptionals;
-import com.skylarkarms.lambdas.Lambdas;
-import com.skylarkarms.lambdas.Predicates;
-import com.skylarkarms.lambdas.Producer;
+import com.skylarkarms.lambdas.*;
 
 import java.util.Objects;
 import java.util.concurrent.Executor;
-import java.util.function.BiConsumer;
-import java.util.function.BooleanSupplier;
-import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.*;
 
 /**
  * Model is a class designed to facilitate a structured separation of concerns.
  * <p> The class is able to coordinate multiple Path activations as a whole.
  * */
 public class Model extends Activators.SysActivator {
-
-    static LazyHolder.SpinnerConfig globalSpinnerConfig = LazyHolder.SpinnerConfig.DEFAULT;
-
-    public static synchronized void setGlobalSpinnerConfig(LazyHolder.SpinnerConfig newConfig) {
-        if (globalSpinnerConfig != LazyHolder.SpinnerConfig.DEFAULT)
-            throw new IllegalStateException("Only one set per application.");
-        globalSpinnerConfig = newConfig;
-    }
 
     /**
      * Used by {@link ModelStore}'s {@link Activators.Activator} via the different {@link Type}s.
@@ -77,10 +63,8 @@ public class Model extends Activators.SysActivator {
 
                     @Override
                     public void deactivate() {
-                        final Model m;
-                        if ((m = model.getOpaque()) != null) {
-                            m.sysDeactivate();
-                        }
+                        final Model m = model.getOpaque();
+                        if (m != null) m.sysDeactivate();
                     }
                 }
         ),
@@ -91,28 +75,22 @@ public class Model extends Activators.SysActivator {
                 modelS -> new Activators.Activator() {
                     @Override
                     public boolean activate() {
-                        final Model m;
-                        if ((m = modelS.getOpaque()) != null) {
-                            return m.sysActivate();
-                        }
-                        return false;
+                        final Model m = modelS.getOpaque();
+                        if (m != null) return m.sysActivate();
+                        else return false;
                     }
 
                     @Override
                     public void deactivate() {
-                        final Model m;
-                        if ((m = modelS.getOpaque()) != null) {
-                            m.sysDeactivate();
-                        }
+                        final Model m = modelS.getOpaque();
+                        if (m != null) m.sysDeactivate();
                     }
                 }
         );
 
         final Function<LazyHolder.Supplier<? extends Model>, Activators.Activator> activ;
 
-        Type(Function<LazyHolder.Supplier<? extends Model>, Activators.Activator> activ) {
-            this.activ = activ;
-        }
+        Type(Function<LazyHolder.Supplier<? extends Model>, Activators.Activator> activ) { this.activ = activ; }
     }
 
     /**
@@ -296,10 +274,17 @@ public class Model extends Activators.SysActivator {
         public <Event> Live(
                 Producer<Event> lifecycleProducer, Event ON, Event OFF, Event DESTROY
         ) {
-            String prov = Settings.debug_mode ?
-                    Exceptionals.formatStack(0, Thread.currentThread().getStackTrace())
-                    :
-                    noDebugModeErr_1;
+            final Supplier<String> provSup = Settings.DEBUG_MODE.ref ? new Supplier<>() {
+                final StackTraceElement[] es = Thread.currentThread().getStackTrace();
+                final Supplier<String> mem = new InstanceSupplier.Impl.Synchronized<>(es,
+                        () -> Exceptionals.formatStack(0, es)
+                );
+
+                @Override
+                public String get() {
+                    return mem.get();
+                }
+            } : () -> noDebugModeErr_1;
             final Activators.SimpleStateActivator state = new Activators.SimpleStateActivator() {
                 @Override
                 protected boolean sysActivate() {
@@ -313,7 +298,7 @@ public class Model extends Activators.SysActivator {
                 @Override
                 public String toString() {
                     return super.toString().concat(
-                            "\n [Synchronized Constructor]." + prov
+                            "\n [Synchronized Constructor]." + provSup.get()
                     );
                 }
             };
@@ -367,12 +352,11 @@ public class Model extends Activators.SysActivator {
         }
 
         private <S extends Activators.StatefulActivator> Activators.BinaryState<?> remove(Object key) {
-            Activators.GenericShuttableActivator<?, Activators.BinaryState<?>> gs;
-            if ((gs = activators.remove(key)) != null) {
+            Activators.GenericShuttableActivator<?, Activators.BinaryState<?>> gs = activators.remove(key);
+            if (gs != null) {
                 gs.removeOwner(this);
                 return activator.state;
-            }
-            return null;
+            } else return null;
         }
 
         protected boolean contains(Object key) { return activators.containsKey(key); }
@@ -416,9 +400,7 @@ public class Model extends Activators.SysActivator {
                                 }
 
                                 @Override
-                                public void deactivate() {
-                                    publisher.remove(consumer);
-                                }
+                                public void deactivate() { publisher.remove(consumer); }
                             }
                     )
             );
@@ -461,9 +443,7 @@ public class Model extends Activators.SysActivator {
                                 }
 
                                 @Override
-                                public void deactivate() {
-                                    res.remove(finalConsumer);
-                                }
+                                public void deactivate() { res.remove(finalConsumer); }
                             }
                     )
             );
@@ -483,9 +463,7 @@ public class Model extends Activators.SysActivator {
             return listener;
         }
 
-        protected<T> Getter<T> asGetter(Path<T> path) {
-            return asGetter(path, Lambdas.Identities.identity());
-        }
+        protected<T> Getter<T> asGetter(Path<T> path) { return asGetter(path, Lambdas.Identities.identity()); }
 
         /**
          * This method will use both:

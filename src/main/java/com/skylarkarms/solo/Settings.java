@@ -10,11 +10,19 @@ import java.util.concurrent.*;
 import java.util.function.Consumer;
 
 public final class Settings {
-    static boolean debug_mode = false;
+    private static volatile boolean debug_mode = false;
+    static volatile boolean debug_mode_grabbed;
 
-    public static void setDebug_mode(boolean debug_mode) {
+    record DEBUG_MODE() { static {debug_mode_grabbed = true;}
+        static final boolean ref = debug_mode;
+    }
+
+    public static synchronized void setDebug_mode(boolean debug_mode) {
+        if (debug_mode_grabbed) throw new IllegalStateException("A solo instance has already being called." +
+                "\n This value must be set before any one instance is initialized (class loading may be included).");
+
         Settings.debug_mode = debug_mode;
-        LazyHolder.debug = debug_mode;
+        LazyHolder.setDebug(debug_mode);
     }
 
     public static boolean concurrent = true;

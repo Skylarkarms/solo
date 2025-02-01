@@ -120,7 +120,7 @@ public abstract class Tree<T, N extends Tree.Node<T, N>> {
      * */
     final BinaryOperator<T> operator;
     final SysForker<T, N> forker;
-    final LazyHolder.Supplier<Map<String, N>> atomicCreator = new LazyHolder.Supplier<>(
+    final LazyHolder.Supplier<Map<String, N>> atomicCreator = LazyHolder.Supplier.getNew(
             () -> {
                 synchronized (map) {
                     if (map.size() > 1) return map;

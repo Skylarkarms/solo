@@ -1,6 +1,6 @@
 package solo;
 
-import com.skylarkarms.concur.LazyHolder;
+import com.skylarkarms.concur.Locks;
 import com.skylarkarms.lambdas.Consumers;
 import com.skylarkarms.print.Print;
 import com.skylarkarms.solo.*;
@@ -44,7 +44,7 @@ public class AsGetterTest {
 
     static class LiveModelA extends Model.Live {
         static Ref.Lazy<String> lazyRef = new Ref.Lazy<>(
-                LazyHolder.SpinnerConfig.DEFAULT,
+                Locks.ExceptionConfig.runtime_10(),
                 LiveModelA.class, modelA -> modelA.toString);
 
 

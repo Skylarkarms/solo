@@ -10,7 +10,6 @@ import com.skylarkarms.lambdas.Predicates;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.lang.reflect.Field;
-import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
@@ -87,8 +86,14 @@ final class Cache<T>
     }
 
     final BinaryPredicate<Versioned<T>>
+            /**
+             * May fail under contention, even if `prev` coincides.
+             * */
             weakSwapper,
             strongSwapper,
+            /**
+             * May fail under contention, even if `prev` coincides.
+             * */
             weakSwapDispatcher,
             strongSwapDispatcher
                     ;
@@ -104,6 +109,7 @@ final class Cache<T>
          * <p> It applies a strongCAS which means that
          * this will never fail for something other than contention alone.
          * */
+        @SuppressWarnings("unused")
         boolean compareAndSwap(T expect, T set);
         /**
          * Attempts to set the value.
@@ -111,6 +117,7 @@ final class Cache<T>
          * <p> It applies a strongCAS which means that
          * this will never fail for something other than contention alone.
          * */
+        @SuppressWarnings("unused")
         boolean weakSet(T set);
     }
 
@@ -190,17 +197,19 @@ final class Cache<T>
         this.isConsumable = excludeOutAlwaysFalse ?
                 () -> !localCache.isDefault()
                 :
-                () -> !localCache.isDefault()
-                        && !excludeOut.test(localCache.value());
+                () -> {
+                    Versioned<T> res = localCache;
+                    return !res.isDefault() && !excludeOut.test(res.value());
+                };
         this.isConsumableSupplier = excludeOutAlwaysFalse ?
                 () -> {
-                    Versioned<T> res;
-                    return (res = localCache).isDefault() ? null : res;
+                    Versioned<T> res = localCache;
+                    return res.isDefault() ? null : res;
                 }
                 :
                 () -> {
-                    Versioned<T> res;
-                    return (res = localCache).isDefault() || excludeOut.test(res.value()) ? null : res;
+                    Versioned<T> res = localCache;
+                    return res.isDefault() || excludeOut.test(res.value()) ? null : res;
                 };
     }
 
@@ -261,32 +270,61 @@ final class Cache<T>
 
     In.ForUpdater<T> getUpdater() { return getUpdater(weakSwapDispatcher); }
 
+    // swap to explicit assignment for faster bytecode.
     private In.ForUpdater<T> getUpdater(
-            BinaryPredicate<Versioned<T>> dispatcher
+            BinaryPredicate<Versioned<T>> weakDispatcher // as of now... all dispatchers are "weak" (spurious failures)
     ) {
         return excludeIn.isAlwaysFalse() ?
                 new In.ForUpdater<>() {
                     @Override
                     public T cas(UnaryOperator<T> u, BinaryOperator<T> r) {
-                        Versioned<T> prev;
-                        T prevT, nextT;
-                        while(
-                                ((prev = localCache).isDiff((nextT = u.apply((prevT = prev.value())))))
+                        Versioned<T> prev = localCache;
+                        final T prevT = prev.value();
+                        T nextT = u.apply(prevT);
+
+                        if (
+                                (prevT != nextT) && (prevT == null || !prevT.equals(nextT))
                         ) {
-                            if (dispatcher.test(prev, prev.newValue(nextT))) return r.apply(prevT, nextT);
-                        }
-                        return null;
+                           Versioned<T> next = prev.newValue(nextT);
+                           while (!weakDispatcher.test(prev, next)) {
+                               Versioned<T> wit = localCache;
+                               if (wit != prev) {
+                                   T w_v = wit.value();
+                                   if (
+                                           (w_v == nextT) || (w_v != null && w_v.equals(nextT))
+                                   ) return null;
+                                   prev = wit;
+                                   nextT = u.apply(wit.value());
+                                   next = prev.newValue(nextT);
+                               }
+                           }
+                           return r.apply(prev.value(), nextT);
+                        } else return null;
+
                     }
 
-                    @SuppressWarnings("StatementWithEmptyBody")
                     @Override
                     public void up(UnaryOperator<T> u) {
-                        Versioned<T> prev;
-                        T nextT;
-                        while (
-                                ((prev = localCache).isDiff((nextT = u.apply(prev.value()))))
-                                        && !dispatcher.test(prev, prev.newValue(nextT))
+                        Versioned<T> prev = localCache;
+                        final T prevT = prev.value();
+                        T nextT = u.apply(prevT);
+
+                        if (
+                                (prevT != nextT) && (prevT == null || !prevT.equals(nextT))
                         ) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            while (!weakDispatcher.test(prev, next)) {
+                                Versioned<T> wit = localCache;
+                                if (wit != prev) {
+                                    T w_v = wit.value();
+                                    if (
+                                            (w_v == nextT) || (w_v != null && w_v.equals(nextT))
+                                    ) return;
+                                    prev = wit;
+                                    nextT = u.apply(wit.value());
+                                    next = prev.newValue(nextT);
+                                }
+                            }
                         }
                     }
                 }
@@ -294,27 +332,61 @@ final class Cache<T>
                 new In.ForUpdater<>() {
                     @Override
                     public T cas(UnaryOperator<T> u, BinaryOperator<T> r) {
-                        Versioned<T> prev;
-                        T prevT, nextT;
-                        while(
-                                ((prev = localCache).isDiff((nextT = u.apply((prevT = prev.value())))))
+
+                        Versioned<T> prev = localCache;
+                        final T prevT = prev.value();
+                        T nextT = u.apply(prevT);
+
+                        if (
+                                ((prevT != nextT) && (prevT == null || !prevT.equals(nextT)))
                                         && !excludeIn.test(nextT, prevT)
                         ) {
-                            if (dispatcher.test(prev, prev.newValue(nextT))) return r.apply(prevT, nextT);
-                        }
-                        return null;
+                            Versioned<T> next = prev.newValue(nextT);
+                            while (!weakDispatcher.test(prev, next)) {
+                                Versioned<T> wit = localCache;
+                                if (wit != prev) {
+                                    T w_v = wit.value();
+                                    if (
+                                            ((w_v == nextT) || (w_v != null && w_v.equals(nextT)))
+                                            ||
+                                                    excludeIn.test(nextT, w_v)
+                                    ) return null;
+                                    prev = wit;
+                                    nextT = u.apply(wit.value());
+                                    next = prev.newValue(nextT);
+                                }
+                            }
+                            return r.apply(prev.value(), nextT);
+                        } else return null;
                     }
 
-                    @SuppressWarnings("StatementWithEmptyBody")
                     @Override
                     public void up(UnaryOperator<T> u) {
-                        Versioned<T> prev;
-                        T prevT, nextT;
-                        while (
-                                ((prev = localCache).isDiff((nextT = u.apply((prevT = prev.value())))))
+
+                        Versioned<T> prev = localCache;
+                        final T prevT = prev.value();
+                        T nextT = u.apply(prevT);
+
+                        if (
+                                ((prevT != nextT) && (prevT == null || !prevT.equals(nextT)))
                                         && !excludeIn.test(nextT, prevT)
-                                        && !dispatcher.test(prev, prev.newValue(nextT))
+
                         ) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            while (!weakDispatcher.test(prev, next)) {
+                                Versioned<T> wit = localCache;
+                                if (wit != prev) {
+                                    T w_v = wit.value();
+                                    if (
+                                            ((w_v == nextT) || (w_v != null && w_v.equals(nextT)))
+                                            ||
+                                                    excludeIn.test(nextT, w_v)
+                                    ) return;
+                                    prev = wit;
+                                    nextT = u.apply(wit.value());
+                                    next = prev.newValue(nextT);
+                                }
+                            }
                         }
                     }
                 };
@@ -370,43 +442,146 @@ final class Cache<T>
         final AtomicInteger ver = new AtomicInteger(0);
         return excludeIn.isAlwaysFalse() ?
                 s -> {
-                    int current = ver.incrementAndGet();
-                    if (!weakSwapDispatcher.test(Versioned.getDefault(), Versioned.first(s))) {
-                        return wExecutor.onExecute(
+                    final int current = ver.incrementAndGet();
+                    Versioned<T> first = localCache;
+                    if (first.isDefault()) {
+                        if (!strongSwapDispatcher.test(first, Versioned.first(s))) {
+                            return current == ver.get() && wExecutor.onExecute(
+                                    () -> {
+                                        // Even tho this alternative seems fine, the cost of having:
+                                        // a) dup_2 +
+                                        // b) volatile int indirection from AtomicInteger
+                                        // completely defeats the short-circuiting after the `&&`
+                                        // This option would be convenient ONLY IF current IS lesser MORE OFTEN THAN NOT...
+                                        // This is rare... so this is sub-optimal
+//                                    Versioned<T> prev;
+//                                    while (
+//                                            !(current < ver.get())
+//                                                    && (prev = localCache).isDiff(s)
+//                                    ) {
+//                                        if (weakSwapDispatcher.test(prev, prev.newValue(s))) return;
+//                                    }
+
+                                        if (current == ver.get()) {
+                                            Versioned<T> prev = localCache;
+                                            T prev_v = prev.value();
+                                            if (
+                                                    (prev_v != s) && (prev_v == null || !prev_v.equals(s)) //embedded non-equals
+                                            ) {
+                                                Versioned<T> next = prev.newValue(s);
+                                                while (!weakSwapDispatcher.test(prev, next)) {
+                                                    Versioned<T> wit = localCache;
+                                                    if (wit != prev) {
+                                                        if (current == ver.get()) {
+                                                            T w_v = wit.value();
+                                                            if (((w_v == s) || (w_v != null && w_v.equals(s)))
+                                                            ) return;
+                                                            prev = wit;
+                                                            next = wit.newValue(s);
+                                                        } else return;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                            );
+                        } else return true;
+                    } else {
+                        return current == ver.get() && wExecutor.onExecute(
                                 () -> {
-                                    Versioned<T> prev;
-                                    while (
-                                            !(current < ver.get())
-                                                    && (prev = localCache).isDiff(s)
-                                    ) {
-                                        if (weakSwapDispatcher.test(prev, prev.newValue(s))) return;
+                                    if (current == ver.get()) {
+                                        Versioned<T> prev = localCache;
+                                        T prev_v = prev.value();
+                                        if (
+                                                (prev_v != s) && (prev_v == null || !prev_v.equals(s))
+                                        ) {
+                                            Versioned<T> next = prev.newValue(s);
+                                            while (!weakSwapDispatcher.test(prev, next)) {
+                                                Versioned<T> wit = localCache;
+                                                if (wit != prev) {
+                                                    if (current == ver.get()) {
+                                                        T w_v = wit.value();
+                                                        if (((w_v == s) || (w_v != null && w_v.equals(s)))
+                                                        ) return;
+                                                        prev = wit;
+                                                        next = wit.newValue(s);
+                                                    } else return;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                         );
                     }
-                    return false;
                 }
                 :
                 s -> {
-                    int current = ver.incrementAndGet();
+                    final int current = ver.incrementAndGet();
                     Versioned<T> prePrev = localCache;
-                    if (prePrev.isDefault() && !excludeIn.test(s, null)
-                            && !weakSwapDispatcher.test(prePrev, Versioned.first(s))
-                    ) {
-                        return wExecutor.onExecute(
+                    if (prePrev.isDefault()) {
+                        if (!excludeIn.test(s, null)) {
+                            if (!strongSwapDispatcher.test(prePrev, Versioned.first(s))) {
+                                return current == ver.get() && wExecutor.onExecute(
+                                        () -> {
+                                            if (current == ver.get()) {
+                                                Versioned<T> prev = localCache;
+                                                T val = prev.value();
+                                                if (
+                                                        ((val != s) && (val == null || !val.equals(s)))
+                                                                && !excludeIn.test(s, val)
+                                                ) {
+                                                    Versioned<T> newVal = prev.newValue(s);
+                                                    while (!weakSwapDispatcher.test(prev, newVal)) {
+                                                        Versioned<T> witness = localCache;
+                                                        if (witness != prev) {
+                                                            if (current == ver.get()) {
+                                                                T w_val = witness.value();
+                                                                if (((w_val == s) || (w_val != null && w_val.equals(s)))
+                                                                        || excludeIn.test(s, w_val)
+                                                                ) return;
+                                                                prev = witness;
+                                                                newVal = prev.newValue(s);
+                                                            } else return;
+                                                        }
+                                                    }
+                                                }
+
+                                            }
+                                        }
+                                );
+                            } else return true;
+                        } else return false;
+                    } else {
+                        return current == ver.get() && wExecutor.onExecute(
                                 () -> {
-                                    Versioned<T> prev;
-                                    while (
-                                            !(current < ver.get())
-                                                    && (prev = localCache).isDiff(s)
-                                                    && !excludeIn.test(s, prev.value())
-                                    ) {
-                                        if (weakSwapDispatcher.test(prev, prev.newValue(s))) return;
+                                    if (current == ver.get()) {
+                                        Versioned<T> prev = localCache;
+                                        T val = prev.value();
+                                        if (
+                                                ((val != s) && (val == null || !val.equals(s)))
+                                                        && !excludeIn.test(s, val)
+                                        ) {
+                                            Versioned<T> newVal = prev.newValue(s);
+                                            while (!weakSwapDispatcher.test(prev, newVal)) {
+                                                Versioned<T> witness = localCache;
+                                                if (witness != prev) {
+                                                    if (current == ver.get()) {
+                                                        T w_val = witness.value();
+                                                        if (
+                                                                ((w_val == s) || (w_val != null && w_val.equals(s)))
+                                                                        || excludeIn.test(s, w_val)
+                                                        ) return;
+                                                        prev = witness;
+                                                        newVal = prev.newValue(s);
+                                                    } else return;
+                                                }
+                                            }
+                                        }
+
                                     }
                                 }
                         );
                     }
-                    return false;
                 };
     }
 
@@ -418,34 +593,66 @@ final class Cache<T>
             Executors.BaseExecutor executor
     ) {
         assert executor != null;
-        final AtomicInteger ver = new AtomicInteger(0);
+        final AtomicInteger ver = new AtomicInteger();
         return excludeIn.isAlwaysFalse() ?
                 s -> {
-                    int current = ver.incrementAndGet();
-                    return executor.onExecute(
+                    final int current = ver.incrementAndGet();
+                    return current == ver.get() && executor.onExecute(
                             () -> {
-                                Versioned<T> prev;
-                                while (
-                                        !(current < ver.get())
-                                                && (prev = localCache).isDiff(s)
-                                ) {
-                                    if (weakSwapDispatcher.test(prev, prev.newValue(s))) return;
+                                if (current == ver.get()) {
+                                    Versioned<T> prev = localCache;
+                                    T p_v = prev.value();
+                                    if ((p_v != s) && (p_v == null || !p_v.equals(s))) {
+                                        Versioned<T> next = prev.newValue(s);
+                                        while (!weakSwapDispatcher.test(prev, next))
+                                        {
+                                            Versioned<T> witness = localCache;
+                                            if (witness != prev) {
+                                                if (current == ver.get()) {
+                                                    T w_v = witness.value();
+                                                    if (
+                                                            (w_v == s) || (w_v != null && w_v.equals(s))
+                                                    ) return;
+                                                    prev = witness;
+                                                    next = prev.newValue(s);
+                                                } else return;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                     );
                 }
                 :
                 s -> {
-                    int current = ver.incrementAndGet();
-                    return executor.onExecute(
+                    final int current = ver.incrementAndGet();
+                    return current == ver.get() && executor.onExecute(
                             () -> {
-                                Versioned<T> prev;
-                                while (
-                                        !(current < ver.get())
-                                                && (prev = localCache).isDiff(s)
-                                                && !excludeIn.test(s, prev.value())
-                                ) {
-                                    if (weakSwapDispatcher.test(prev, prev.newValue(s))) return;
+                                if (current == ver.get()) {
+                                    Versioned<T> prev = localCache;
+                                    T p_v = prev.value();
+                                    if (
+                                            ((p_v != s) && (p_v == null || !p_v.equals(s)))
+                                                    && !excludeIn.test(s, p_v)
+                                    ) {
+                                        Versioned<T> next = prev.newValue(s);
+                                        while (!weakSwapDispatcher.test(prev, next))
+                                        {
+                                            Versioned<T> wit = localCache;
+                                            if (wit != prev) {
+                                                if (current == ver.get()) {
+                                                    T w_v = wit.value();
+                                                    if (
+                                                            ((w_v == s) || (w_v != null && w_v.equals(s)))
+                                                                    || excludeIn.test(s, w_v)
+                                                    ) return;
+                                                    prev = wit;
+                                                    next = prev.newValue(s);
+                                                } else return;
+                                            }
+                                        }
+
+                                    }
                                 }
                             }
                     );
@@ -466,43 +673,69 @@ final class Cache<T>
     )
     {
         final AtomicInteger ver = new AtomicInteger();
-        RuntimeException exception = new RuntimeException();
+        StackTraceElement[] es = Settings.DEBUG_MODE.ref ? Thread.currentThread().getStackTrace() : null;
         return excludeIn.isAlwaysFalse() ?
                 executor != null ?
                         s -> {
-                            int current = ver.incrementAndGet();
-                            return executor.onExecute(
+                            final int current = ver.incrementAndGet();
+                            return current == ver.get() && executor.onExecute(
                                     () -> {
-                                        Versioned<T> prev;
-                                        T nextCall;
-                                        while (
-                                                current == ver.getOpaque()
-                                                        && (prev = localCache).isDiff((nextCall = getCall(exception, s)))
-                                        ) {
+                                        if (current == ver.get()) {
+                                            T nextCall = getCall(es, s);
+                                            Versioned<T> prev = localCache;
+                                            T p_v = prev.value();
                                             if (
-                                                    current == ver.getOpaque()
-                                                            && weakSwapDispatcher.test(prev, prev.newValue(nextCall))
+                                                    (p_v != nextCall) && (p_v == null || !p_v.equals(nextCall))
                                             ) {
-                                                return;
+                                                Versioned<T> next = prev.newValue(nextCall);
+                                                while (!weakSwapDispatcher.test(prev, next)) {
+                                                    Versioned<T> wit = localCache;
+                                                    if (wit != prev) {
+                                                        if (current == ver.get()) {
+                                                            T w_t = wit.value();
+                                                            if (
+                                                                    (w_t == nextCall) || (w_t != null && w_t.equals(nextCall))
+                                                            ) return;
+                                                            prev = wit;
+                                                            next = wit.newValue(nextCall);
+                                                        } else return;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                             );
                         } :
                         s -> {
-                            int current = ver.incrementAndGet();
-                            Versioned<T> prev;
-                            T nextCall;
-                            while (
-                                    current == ver.getOpaque()
-                                            && (prev = localCache).isDiff((nextCall = getCall(exception, s)))
+                            final int current = ver.incrementAndGet();
+
+                            Versioned<T> prev = localCache;
+                            T nextCall = getCall(es, s);
+                            T p_v = prev.value();
+
+                            // we should check for version inside while loop after the fist CAS-miss since
+                            // there is no real reason to believe that we may be in a concurrent environment besides the first miss.
+
+                            if (
+                                    (p_v != nextCall) && (p_v == null || !p_v.equals(nextCall))
                             ) {
-                                if (
-                                        current == ver.getOpaque()
-                                                && weakSwapDispatcher.test(prev, prev.newValue(nextCall))
+                                Versioned<T> next = prev.newValue(nextCall);
+                                while (
+                                        !weakSwapDispatcher.test(prev, next)
                                 ) {
-                                    return true;
+                                    Versioned<T> wit = localCache;
+                                    if (wit != prev) {
+                                        if (current == ver.get()) {
+                                            T w_t = wit.value();
+                                            if (
+                                                    (w_t == nextCall) || (w_t != null && w_t.equals(nextCall))
+                                            ) return false;
+                                            prev = wit;
+                                            next = wit.newValue(nextCall);
+                                        } else return false;
+                                    }
                                 }
+                                return true;
                             }
                             return false;
                         }
@@ -510,57 +743,83 @@ final class Cache<T>
                 executor != null ?
                         s -> {
                             int current = ver.incrementAndGet();
-                            return executor.onExecute(
+                            return current == ver.get() && executor.onExecute(
                                     () -> {
-                                        Versioned<T> prev;
-                                        T nextCall;
-                                        while (
-                                                current == ver.getOpaque()
-                                                        && (prev = localCache).isDiff(
-                                                        (nextCall = getCall(exception, s))
-                                                )
-                                                        && current == ver.getOpaque()
-                                                        && !excludeIn.test(nextCall, prev.value())
-                                        ) {
+                                        if (current == ver.get()) {
+                                            T nextCall = getCall(es, s);
+                                            Versioned<T> prev = localCache;
+                                            T p_v = prev.value();
                                             if (
-                                                    weakSwapDispatcher.test(prev, prev.newValue(nextCall))) {
-                                                return;
+                                                    ((p_v != nextCall) && (p_v == null || !p_v.equals(nextCall)))
+                                                            &&
+                                                            !excludeIn.test(nextCall, p_v)
+                                            ) {
+                                                Versioned<T> next = prev.newValue(nextCall);
+                                                while (!weakSwapDispatcher.test(prev, next)) {
+                                                    Versioned<T> wit = localCache;
+                                                    if (wit != prev) {
+                                                        if (current == ver.get()) {
+                                                            T w_t = wit.value();
+                                                            if (
+                                                                    ((w_t == nextCall) || (w_t != null && w_t.equals(nextCall)))
+                                                                            || excludeIn.test(nextCall, w_t)
+
+                                                            ) return;
+                                                            prev = wit;
+                                                            next = wit.newValue(nextCall);
+                                                        } else return;
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                             );
                         } :
                         s -> {
-                            int current = ver.incrementAndGet();
-                            Versioned<T> prev;
-                            T nextCall;
-                            while (
-                                    current == ver.getOpaque()
-                                            && (prev = localCache).isDiff(
-                                            (nextCall = getCall(exception, s))
-                                    )
-                                            && current == ver.getOpaque()
-                                            && !excludeIn.test(nextCall, prev.value())
+                            final int current = ver.incrementAndGet();
+
+                            Versioned<T> prev = localCache;
+                            T nextCall = getCall(es, s);
+                            T p_v = prev.value();
+
+                            // we should check for version inside while loop after the fist CAS-miss since
+                            // there is no real reason to believe that we may be in a concurrent environment besides the first miss.
+
+                            if (
+                                    ((p_v != nextCall) && (p_v == null || !p_v.equals(nextCall)))
+                                            && !excludeIn.test(nextCall, p_v)
                             ) {
-                                if (
-                                        weakSwapDispatcher.test(prev, prev.newValue(nextCall))) {
-                                    return true;
+                                Versioned<T> next = prev.newValue(nextCall);
+                                while (
+                                        !weakSwapDispatcher.test(prev, next)
+                                ) {
+                                    Versioned<T> wit = localCache;
+                                    if (wit != prev) {
+                                        if (current == ver.get()) {
+                                            T w_t = wit.value();
+                                            if (
+                                                    ((w_t == nextCall) || (w_t != null && w_t.equals(nextCall)))
+                                                            || excludeIn.test(nextCall, w_t)
+                                            ) return false;
+                                            prev = wit;
+                                            next = wit.newValue(nextCall);
+                                        } else return false;
+                                    }
                                 }
+                                return true;
                             }
                             return false;
                         };
     }
 
-    private static <T> T getCall(Exception e, Callable<T> s) {
+    private static <T> T getCall(StackTraceElement[] es, Callable<T> s) {
         try {
             return s.call();
         } catch (Exception ex) {
-            e.initCause(ex);
-            try {
-                throw e;
-            } catch (Exception exc) {
-                throw new RuntimeException(exc);
-            }
+            throw es != null ? new RuntimeException(
+                    "provenance = ".concat(Exceptionals.formatStack(0, es)),
+                    ex
+            ) : new RuntimeException(ex);
         }
     }
 
@@ -572,11 +831,12 @@ final class Cache<T>
 
     In.InStrategy.ToBooleanConsumer<T> getSource()
     {
-        final StackTraceElement[] es = Settings.debug_mode ? Thread.currentThread().getStackTrace() : null;
+        final StackTraceElement[] es = Settings.DEBUG_MODE.ref ? Thread.currentThread().getStackTrace() : null;
         return excludeIn.isAlwaysFalse() ?
                 (s) -> {
                     Versioned<T> prev = localCache;
-                    if (prev.isDiff(s)) {
+                    T p_v = prev.value();
+                    if ((p_v != s) && (p_v == null || !p_v.equals(s))) {
                         Versioned<T> nextV = prev.newValue(s);
                         boolean swapped = strongSwapDispatcher.test(prev, nextV);
                         assert nextV == localCache :
@@ -591,7 +851,10 @@ final class Cache<T>
                 :
                 (s) -> {
                     Versioned<T> prev = localCache;
-                    if (prev.isDiff(s) && !excludeIn.test(s, prev.value())) {
+                    T p_v = prev.value();
+                    if (
+                            ((p_v != s) && (p_v == null || !p_v.equals(s)))
+                                    && !excludeIn.test(s, p_v)) {
                         Versioned<T> nextV = prev.newValue(s);
                         boolean swapped = strongSwapDispatcher.test(prev, nextV);
                         assert nextV == localCache :
@@ -611,9 +874,7 @@ final class Cache<T>
         Receiver<?> def = (Receiver<Object>) objectVersioned -> {};
 
         @SuppressWarnings("unchecked")
-        static <T> Receiver<T> getDefault() {
-            return (Receiver<T>) def;
-        }
+        static <T> Receiver<T> getDefault() { return (Receiver<T>) def; }
     }
 
     /**
@@ -627,28 +888,43 @@ final class Cache<T>
 
     @SuppressWarnings("unchecked")
     <Parent> CompoundReceiver<T, Parent> forMapped(Function<Parent, T> map) {
-        boolean excludeIsDefault;
-        if ((excludeIsDefault = excludeIn.isAlwaysFalse()) && !Lambdas.Identities.isIdentity(map)) {
+        final boolean excludeIsDefault = excludeIn.isAlwaysFalse();
+        if (excludeIsDefault && !Lambdas.Identities.isIdentity(map)) {
             return new CompoundReceiver<>() {
                 @Override
                 public void accept(Versioned<Parent> versioned) {
-                    Versioned<T> prev;
-                    T prevT, nextT;
-                    while (versioned.isNewerThanVersion((prev = localCache))) {
-                        prevT = prev.value();
-                        nextT = versioned.applyToVal(map);
-                        if (!Objects.equals(prevT, nextT)) {
-                            if (weakSwapDispatcher.test(prev, versioned.swapType(nextT))) return;
-                        } else return;
+                    Versioned<T> prev = localCache;
+                    final int v_ver = versioned.version();
+                    if (v_ver > prev.version()) {
+                        T nextT = versioned.applyToVal(map);
+                        final T p_v = prev.value();
+                        if (
+                                (p_v != nextT) && (p_v == null || !p_v.equals(nextT))
+                        ) {
+                            Versioned<T> next = versioned.swapType(nextT);
+                            while (!weakSwapDispatcher.test(prev, next)) {
+                                Versioned<T> wit = localCache;
+                                if (wit != prev) { //TRUE failure...
+                                    if (v_ver > wit.version()) {
+                                        // a true failure must re-assign
+                                        T c_v = wit.value();
+                                        if (
+                                                (c_v == nextT) || (c_v != null && c_v.equals(nextT))
+                                        ) return;
+                                        prev = wit;
+                                    } else return;
+                                }
+                            }
+                        }
                     }
                 }
 
                 @Override
                 public Versioned<T> apply(Versioned<Parent> versioned) {
-                    final Versioned<T> prev, next;
-                    int diff;
+                    final Versioned<T> prev = localCache, next;
+                    int diff = versioned.version() - prev.version();
                     if (
-                            (diff = versioned.version() - (prev = localCache).version()) > 0
+                            diff > 0
                                     && strongSwapper.test(prev, next = versioned.swapType(map.apply(versioned.value())))
                     ) return next;
                     else return diff == 0 ? prev : null;
@@ -659,24 +935,34 @@ final class Cache<T>
 
                 @Override
                 public Versioned<T> apply(Versioned<T> versioned) {
-                    Versioned<T> prev;
-                    int diff;
+                    Versioned<T> prev = localCache;
+                    int diff = versioned.version() - prev.version();
                     if (
-                            (diff = versioned.version() - (prev = localCache).version()) > 0
+                            diff > 0
                                     && strongSwapper.test(prev, versioned)
                     ) return versioned;
                     else return diff == 0 ? prev : null;
                 }
 
-                @SuppressWarnings("StatementWithEmptyBody")
                 @Override
                 public void accept(Versioned<T> versioned) {
-                    Versioned<T> prev;
-                    while (
-                            versioned.isNewerThan(prev = localCache)
-                                    && prev.isDiff(versioned)
-                                    && !weakSwapDispatcher.test(prev, versioned)
-                    ) {
+                    Versioned<T> prev = localCache;
+                    final int v_ver = versioned.version();
+                    if (v_ver > prev.version()) {
+                        final T p_v = prev.value();
+                        final  T v_v = versioned.value();
+                        if ((p_v != v_v) && (p_v == null || !p_v.equals(v_v))) {
+                            while (!weakSwapDispatcher.test(prev, versioned)) {
+                                Versioned<T> wit = localCache;
+                                if (wit != prev) {
+                                    if (v_ver > wit.version()) {
+                                        T w_v = wit.value();
+                                        if ((w_v == v_v) || (w_v != null && w_v.equals(v_v))) return;
+                                        prev = wit;
+                                    } else return;
+                                }
+                            }
+                        }
                     }
                 }
             };
@@ -684,34 +970,44 @@ final class Cache<T>
             return new CompoundReceiver<>() { //never default AND map.
                 @Override
                 public void accept(Versioned<Parent> versioned) {
-                    Versioned<T> prev;
-                    T prevT, nextT;
-                    while (versioned.isNewerThanVersion((prev = localCache))) {
-                        prevT = prev.value();
-                        nextT = versioned.applyToVal(map);
-                        if (!Objects.equals(prevT, nextT) && !excludeIn.test(nextT, prevT)) {
-                            if (weakSwapDispatcher.test(prev, versioned.swapType(nextT))) return;
-                        } else return;
+                    Versioned<T> prev = localCache;
+                    final int v_ver = versioned.version();
+                    if (v_ver > prev.version()) {
+                        final T prevT = prev.value(), nextT = versioned.applyToVal(map);
+                        if (
+                                ((prevT != nextT) && (prevT == null || !prevT.equals(nextT)))
+                                && !excludeIn.test(nextT, prevT)
+                        ) {
+                            Versioned<T> next = versioned.swapType(nextT);
+                            while (!weakSwapDispatcher.test(prev, next)) {
+                                Versioned<T> wit = localCache;
+                                if (wit != prev) {
+                                    if (v_ver > wit.version()) {
+                                        T w_t = wit.value();
+                                        if (
+                                                ((w_t == nextT) || (w_t != null && w_t.equals(nextT)))
+                                                        || excludeIn.test(nextT, w_t)
+                                        ) return;
+                                        prev = wit;
+                                    } else return;
+                                }
+                            }
+                        }
                     }
+
                 }
 
                 @Override
                 public Versioned<T> apply(Versioned<Parent> versioned) {
-                    final Versioned<T> prev;
-                    final T nextValue;
-                    int diff;
+                    final Versioned<T> prev = localCache;
+                    final T nextValue = map.apply(versioned.value());
+                    int diff = versioned.version() - prev.version();
                     if (
-                            (diff = versioned.version() - (prev = localCache).version()) > 0
-                                    && !excludeIn.test(
-                                    nextValue = map.apply(versioned.value()),
-                                    prev.value()
-                            )
+                            diff > 0 && !excludeIn.test(nextValue, prev.value())
                     ) {
                         // prevent extra allocation if test NOT passed.
-                        Versioned<T> next;
-                        if (strongSwapper.test(prev, next = versioned.swapType(nextValue))) {
-                            return next;
-                        }
+                        Versioned<T> next = versioned.swapType(nextValue);
+                        if (strongSwapper.test(prev, next)) return next;
                     }
                     return diff == 0 ? prev : null;
                 }
@@ -722,26 +1018,42 @@ final class Cache<T>
 
                 @Override
                 public Versioned<T> apply(Versioned<T> versioned) {
-                    Versioned<T> prev;
-                    int diff;
+                    final Versioned<T> prev = localCache;
+                    int diff = versioned.version() - prev.version();
                     if (
-                            (diff = versioned.version() - (prev = localCache).version()) > 0
+                            diff > 0
                                     && !excludeIn.test(versioned.value(), prev.value())
                                     && strongSwapper.test(prev, versioned)
                     ) return versioned;
                     return diff == 0 ? prev : null;
                 }
 
-                @SuppressWarnings("StatementWithEmptyBody")
                 @Override
                 public void accept(Versioned<T> versioned) {
-                    Versioned<T> prev;
-                    while (
-                            versioned.isNewerThan(prev = localCache)
-                                    && prev.isDiff(versioned)
-                                    && !excludeIn.test(versioned.value(), prev.value())
-                                    && !weakSwapDispatcher.test(prev, versioned)
-                    ) {
+                    Versioned<T> prev = localCache;
+                    final int v_ver = versioned.version();
+                    if (v_ver > prev.version()) {
+                        final T prev_val = prev.value(), ver_val = versioned.value();
+                        if (
+                                ((prev_val != ver_val) && (prev_val == null || !prev_val.equals(ver_val)))
+                                        && !excludeIn.test(versioned.value(), prev.value())
+
+                        ) {
+                            while (!weakSwapDispatcher.test(prev, versioned)) {
+                                Versioned<T> wit = localCache;
+                                if (wit != prev) {
+                                    if (v_ver > wit.version()) {
+                                        T w_v = wit.value();
+                                        if (
+                                                ((w_v == ver_val) || (w_v != null && w_v.equals(ver_val)))
+                                                        || excludeIn.test(versioned.value(), wit.value())
+                                        ) return;
+
+                                        prev = wit;
+                                    } else return;
+                                }
+                            }
+                        }
                     }
                 }
             };
@@ -768,13 +1080,13 @@ final class Cache<T>
 
         /**WARNING, If not volatile... de-virtualization may result in bugs from JIT cache hoisting (NEVER cache promotion from processor)*/
         @SuppressWarnings("fieldMayBeFinal")
-        volatile/*private*/ int parent = 0;
+        volatile int parent = 0;
 
-        static final VarHandle VALUE;
+        static final VarHandle PARENT;
 
         static {
             try {
-                VALUE = MethodHandles.lookup().findVarHandle(VersionedReceiver.class, "parent", int.class);
+                PARENT = MethodHandles.lookup().findVarHandle(VersionedReceiver.class, "parent", int.class);
             } catch (ReflectiveOperationException e) {
                 throw new ExceptionInInitializerError(e);
             }
@@ -806,67 +1118,141 @@ final class Cache<T>
         ) {
             if (excludeIn.isAlwaysFalse()) {
                 this.onActive = versioned -> {
-                    int current = parent, nextV = versioned.version();
-                    Versioned<T> prev = localCache;
-                    T newVal = versioned.value();
-                    if (prev.isDiff(newVal)) {
+                    final int current = parent, nextV = versioned.version();
+                    final Versioned<T> prev = localCache;
+                    final T p_v = prev.value();
+                    final T newVal = versioned.value();
+                    if ((p_v != newVal) && (p_v == null || !p_v.equals(newVal))) {
                         Versioned<T> next = prev.newValue(newVal);
-                        if (VALUE.compareAndSet(this, current, nextV)
+                        if (PARENT.compareAndSet(this, current, nextV)
                                 && strongSwapDispatcher.test(prev, next)
                         ) return next;
                     }
                     return null;
                 };
                 this.core = versioned -> {
-                    int prevV, nextV = versioned.version();
-                    Versioned<T> prev, next;
-                    T nextT = versioned.value();
-                    while (nextV > (prevV = parent)) {
-                        prev = localCache;
-                        if (prev.isDiff(nextT)) {
-                            next = prev.newValue(nextT);
-                            if (
-                                    (VALUE.compareAndSet(this, prevV, nextV)
-                                            && weakSwapDispatcher.test(prev, next))
-                            ) return;
-                        } else return;
+                    // When parent is set... weakDispatcher should reattempt until success... OR STOP if witness parent increases during re-attempt
+                    // Higher initial throughput is allowed by not relying on atomicInteger, since it allows us to load
+                    // `localCache` and map `next` before strongCASing on the int.
+                    // this "breathing room" should allow for MORE context-switches, resulting in more backpressure drops
+                    // benefiting the downstream, with the tradeoff of some extra computing during this step,
+                    // for all the mappings of `next` between `parent` load and `parent` store.
+//                    final int nextV = versioned.version();
+//                    int prevV = parent;
+//                    Versioned<T> prev, next;
+//                    T nextT = versioned.value();
+//                    while (nextV > prevV) {
+//                        prev = localCache;
+//                        if (prev.isDiff(nextT)) {
+//                            next = prev.newValue(nextT);
+//                            if (
+//                                    PARENT.compareAndSet(this, prevV, nextV) //better than compareAndExchange + cast + dup_2
+//                            ) {
+//                                while (!weakSwapDispatcher.test(prev, next)) {
+//                                    Versioned<T> wit = localCache;
+//                                    if (prev != wit) {
+//                                        if (!wit.isDiff(nextT) || nextV != parent) return;
+//                                        prev = wit;
+//                                        next = wit.newValue(nextT);
+//                                    }
+//                                }
+//                                return;
+//                            } else prevV = parent;
+//                        } else return;
+//                    }
+
+                    // Another alternative which performs fewer loads
+                    // from localCache... less re-mappings of next and allows super
+                    // late assignments preventing wasted loads.
+                    final int nextV = versioned.version();
+                    int prevV = parent;
+                    if (nextV > prevV) {
+                        Versioned<T> prev = localCache;
+                        final T p_v = prev.value();
+                        final T nextT = versioned.value();
+                        if ((p_v != nextT) && (p_v == null || !p_v.equals(nextT))) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            do {
+                                if (
+                                        PARENT.compareAndSet(this, prevV, nextV) //better than compareAndExchange + cast + dup_2
+                                ) {
+                                    while (!weakSwapDispatcher.test(prev, next)) {
+                                        Versioned<T> wit = localCache;
+                                        if (prev != wit) {
+                                            if (nextV == parent) {
+                                                T w_v = wit.value();
+                                                if ((w_v == nextT) || (w_v != null && w_v.equals(nextT))) return;
+                                                prev = wit;
+                                                next = wit.newValue(nextT);
+                                            } else return;
+                                        }
+                                    }
+                                    return;
+                                }
+                                prevV = parent;
+                            } while (nextV > prevV);
+                        }
                     }
                 };
             } else {
                 this.onActive = versioned -> {
-                    int current = parent, nextV = versioned.version();
+                    final int current = parent, nextV = versioned.version();
                     final Versioned<T> prev = localCache;
+                    final T p_v = prev.value();
                     final T nextValue = versioned.value();
-                    if (prev.isDiff(nextValue) && !excludeIn.test(nextValue, prev.value())) {
+                    if (
+                            ((p_v != nextValue) && (p_v == null || !p_v.equals(nextValue)))
+                                    && !excludeIn.test(nextValue, prev.value())
+                    ) {
                         Versioned<T> next = prev.newValue(nextValue);
-                        if (VALUE.compareAndSet(this, current, nextV)
+                        if (PARENT.compareAndSet(this, current, nextV)
                                 && strongSwapDispatcher.test(prev, next)
                         ) return next;
                     }
                     return null;
                 };
                 this.core = versioned -> {
-                    int prevV, nextV = versioned.version();
-                    Versioned<T> prev, next;
-                    T nextT = versioned.value();
-                    while (nextV > (prevV = parent)) {
-                        prev = localCache;
-                        if (prev.isDiff(nextT) && !excludeIn.test(nextT, prev.value())) {
-                            next = prev.newValue(nextT);
-                            if (
-                                    (VALUE.compareAndSet(this, prevV, nextV)
-                                            && weakSwapDispatcher.test(prev, next))
-                            ) return;
-                        } else return;
+                    final int nextV = versioned.version();
+                    int prevV = parent;
+                    if (nextV > prevV) {
+                        Versioned<T> prev = localCache;
+                        final T p_v = prev.value();
+                        final T nextT = versioned.value();
+                        if (
+                                ((p_v != nextT) && (p_v == null || !p_v.equals(nextT)))
+                                && !excludeIn.test(nextT, p_v)
+                        ) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            do {
+                                if (
+                                        PARENT.compareAndSet(this, prevV, nextV) //better than compareAndExchange + cast + dup_2
+                                ) {
+                                    while (!weakSwapDispatcher.test(prev, next)) {
+                                        Versioned<T> wit = localCache;
+                                        if (prev != wit) {
+                                            if (nextV == parent) {
+                                                T w_v = wit.value();
+                                                if (
+                                                        ((w_v == nextT) || (w_v != null && w_v.equals(nextT)))
+                                                        || excludeIn.test(nextT, w_v)
+                                                ) return;
+                                                prev = wit;
+                                                next = wit.newValue(nextT);
+                                            } else return;
+                                        }
+                                    }
+                                    return;
+                                }
+                                prevV = parent;
+                            } while (nextV > prevV);
+                        }
                     }
                 };
             }
         }
 
         @Override
-        public Versioned<T> apply(Versioned<T> versioned) {
-            return onActive.apply(versioned);
-        }
+        public Versioned<T> apply(Versioned<T> versioned) { return onActive.apply(versioned); }
 
         @Override
         public void accept(Versioned<T> versioned) { core.accept(versioned); }
@@ -883,40 +1269,11 @@ final class Cache<T>
                 this.onActive = versioned -> {
                     int current = parent, nextV = versioned.version();
                     Versioned<T> prev = localCache;
+                    T p_v = prev.value();
                     T nextT = map.apply(versioned.value());
-                    if (prev.isDiff(nextT)) {
-                        if (VALUE.compareAndSet(this, current, nextV)) {
-                            Versioned<T> next;
-                            if (strongSwapDispatcher.test(prev, next = prev.newValue(nextT))) {
-                                return next;
-                            }
-                        }
-                    }
-                    return null;
-                };
-                this.core = versioned -> {
-                    int prevV, nextV = versioned.version();
-                    Versioned<T> prev, next;
-                    T nextT = map.apply(versioned.value());
-                    while (nextV > (prevV = parent)) {
-                        prev = localCache;
-                        if (prev.isDiff(nextT)) {
-                            next = prev.newValue(nextT);
-                            if (
-                                    (VALUE.compareAndSet(this, prevV, nextV)
-                                            && weakSwapDispatcher.test(prev, next))
-                            ) return;
-                        } else return;
-                    }
-                };
-            } else {
-                this.onActive = versioned -> {
-                    int current = parent, nextV = versioned.version();
-                    final Versioned<T> prev = localCache;
-                    final T nextValue = map.apply(versioned.value());
-                    if (prev.isDiff(nextValue) && !excludeIn.test(nextValue, prev.value())) {
-                        Versioned<T> next = prev.newValue(nextValue);
-                        if (VALUE.compareAndSet(this, current, nextV)) {
+                    if ((p_v != nextT) && (p_v == null || !p_v.equals(nextT))) {
+                        if (PARENT.compareAndSet(this, current, nextV)) {
+                            Versioned<T> next = prev.newValue(nextT);
                             if (strongSwapDispatcher.test(prev, next)) {
                                 return next;
                             }
@@ -925,32 +1282,103 @@ final class Cache<T>
                     return null;
                 };
                 this.core = versioned -> {
-                    int prevV, nextV = versioned.version();
-                    Versioned<T> prev, next;
-                    T nextT = map.apply(versioned.value());
-                    while (nextV > (prevV = parent)) {
-                        prev = localCache;
-                        if (prev.isDiff(nextT) && !excludeIn.test(nextT, prev.value())) {
-                            next = prev.newValue(nextT);
-                            if (
-                                    (VALUE.compareAndSet(this, prevV, nextV)
-                                            && weakSwapDispatcher.test(prev, next))
-                            ) return;
-                        } else return;
+                    final int nextV = versioned.version();
+                    int prevV = parent;
+                    if (nextV > prevV) {
+                        Versioned<T> prev = localCache;
+                        final T p_v = prev.value();
+                        final T nextT = map.apply(versioned.value());
+                        if (
+                                (p_v != nextT) && (p_v == null || !p_v.equals(nextT))
+                        ) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            do {
+                                if (
+                                        PARENT.compareAndSet(this, prevV, nextV) //better than compareAndExchange + cast + dup_2
+                                ) {
+                                    while (!weakSwapDispatcher.test(prev, next)) {
+                                        Versioned<T> wit = localCache;
+                                        if (prev != wit) {
+                                            if (nextV == parent) {
+                                                T w_v = wit.value();
+                                                if ((w_v == nextT) || (w_v != null && w_v.equals(nextT))) return;
+                                                prev = wit;
+                                                next = wit.newValue(nextT);
+                                            } else return;
+                                        }
+                                    }
+                                    return;
+                                }
+                                prevV = parent;
+                            } while (nextV > prevV);
+                        }
+                    }
+                };
+            } else {
+                this.onActive = versioned -> {
+                    int current = parent, nextV = versioned.version();
+                    final Versioned<T> prev = localCache;
+                    final T p_v = prev.value();
+                    final T nextValue = map.apply(versioned.value());
+                    if (
+                            ((p_v != nextValue) && (p_v == null || !p_v.equals(nextValue)))
+                                    && !excludeIn.test(nextValue, p_v)
+                    ) {
+                        Versioned<T> next = prev.newValue(nextValue);
+                        if (PARENT.compareAndSet(this, current, nextV)) {
+                            if (strongSwapDispatcher.test(prev, next)) {
+                                return next;
+                            }
+                        }
+                    }
+                    return null;
+                };
+                this.core = versioned -> {
+                    final int nextV = versioned.version();
+                    int prevV = parent;
+                    if (nextV > prevV) {
+                        final T nextT = map.apply(versioned.value());
+                        Versioned<T> prev = localCache;
+                        final T p_v = prev.value();
+                        if (
+                                ((p_v != nextT) && (p_v == null || !p_v.equals(nextT)))
+                                        && !excludeIn.test(nextT, p_v)
+                        ) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            do {
+                                if (
+                                        PARENT.compareAndSet(this, prevV, nextV)
+                                ) {
+                                    while (!weakSwapDispatcher.test(prev, next)) {
+                                        Versioned<T> wit = localCache;
+                                        if (prev != wit) {
+                                            if (nextV == parent) {
+                                                T w_v = wit.value();
+                                                if (
+                                                        ((w_v == nextT) || (w_v != null && w_v.equals(nextT)))
+                                                        ||
+                                                                excludeIn.test(nextT, w_v)
+                                                ) return;
+                                                prev = wit;
+                                                next = wit.newValue(nextT);
+                                            } else return;
+                                        }
+                                    }
+                                    return;
+                                }
+                                prevV = parent;
+                            } while (nextV > prevV);
+                        }
                     }
                 };
             }
         }
 
         @Override
-        public Versioned<T> apply(Versioned<S> versioned) {
-            return onActive.apply(versioned);
-        }
+        public Versioned<T> apply(Versioned<S> versioned) { return onActive.apply(versioned); }
 
         @Override
-        public void accept(Versioned<S> versioned) {
-            core.accept(versioned);
-        }
+        public void accept(Versioned<S> versioned) { core.accept(versioned); }
     }
 
     class HierarchicalUpdater<S> extends VersionedReceiver implements CompoundReceiver<T, S> {
@@ -964,40 +1392,13 @@ final class Cache<T>
                 this.silentCore = versioned -> {
                     int current = parent, nextV = versioned.version();
                     Versioned<T> prev = localCache;
-                    T nextT = map.apply(prev.value(), versioned.value());
-                    if (prev.isDiff(nextT)) {
-                        if (VALUE.compareAndSet(this, current, nextV)) {
-                            Versioned<T> next;
-                            if (strongSwapper.test(prev, next = prev.newValue(nextT))) {
-                                return next;
-                            }
-                        }
-                    }
-                    return null;
-                };
-                this.core = versioned -> {
-                    int prevV, nextV = versioned.version();
-                    Versioned<T> prev, next;
-                    while (nextV > (prevV = parent)) {
-                        prev = localCache;
-                        T nextT = map.apply(prev.value(), versioned.value());
-                        if (prev.isDiff(nextT)) {
-                            next = prev.newValue(nextT);
-                            if (
-                                    (VALUE.compareAndSet(this, prevV, nextV)
-                                            && weakSwapDispatcher.test(prev, next))
-                            ) return;
-                        } else return;
-                    }
-                };
-            } else {
-                this.silentCore = versioned -> {
-                    int current = parent, nextV = versioned.version();
-                    final Versioned<T> prev = localCache;
-                    final T nextValue = map.apply(prev.value(), versioned.value());
-                    if (prev.isDiff(nextValue) && !excludeIn.test(nextValue, prev.value())) {
-                        Versioned<T> next = prev.newValue(nextValue);
-                        if (VALUE.compareAndSet(this, current, nextV)) {
+                    final T p_v = prev.value();
+                    T nextT = map.apply(p_v, versioned.value());
+                    if (
+                            (p_v != nextT) && (p_v == null || !p_v.equals(nextT))
+                    ) {
+                        if (PARENT.compareAndSet(this, current, nextV)) {
+                            Versioned<T> next = prev.newValue(nextT);
                             if (strongSwapper.test(prev, next)) {
                                 return next;
                             }
@@ -1006,33 +1407,102 @@ final class Cache<T>
                     return null;
                 };
                 this.core = versioned -> {
-                    int prevV, nextV = versioned.version();
-                    Versioned<T> prev, next;
-                    while (nextV > (prevV = parent)) {
-                        prev = localCache;
-                        T prevVal = prev.value();
-                        T nextT = map.apply(prevVal, versioned.value());
-                        if (prev.isDiff(nextT) && !excludeIn.test(nextT, prevVal)) {
-                            next = prev.newValue(nextT);
-                            if (
-                                    (VALUE.compareAndSet(this, prevV, nextV)
-                                            && weakSwapDispatcher.test(prev, next))
-                            ) return;
-                        } else return;
+                    final int nextV = versioned.version();
+                    int prevV = parent;
+                    if (nextV > prevV) {
+                        Versioned<T> prev = localCache;
+                        final T p_v = prev.value();
+                        final T nextT = map.apply(p_v, versioned.value());
+                        if (
+                                (p_v != nextT) && (p_v == null || !p_v.equals(nextT))
+                        ) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            do {
+                                if (
+                                        PARENT.compareAndSet(this, prevV, nextV)
+                                ) {
+                                    while (!weakSwapDispatcher.test(prev, next)) {
+                                        Versioned<T> wit = localCache;
+                                        if (prev != wit) {
+                                            if (nextV == parent) {
+                                                T w_v = wit.value();
+                                                T new_next = map.apply(w_v, versioned.value());
+                                                if ((w_v == new_next) || (w_v != null && w_v.equals(new_next))) return;
+                                                prev = wit;
+                                                next = wit.newValue(new_next);
+                                            } else return;
+                                        }
+                                    }
+                                    return;
+                                }
+                                prevV = parent;
+                            } while (nextV > prevV);
+                        }
+                    }
+                };
+            } else {
+                this.silentCore = versioned -> {
+                    int current = parent, nextV = versioned.version();
+                    final Versioned<T> prev = localCache;
+                    final T p_v = prev.value();
+                    final T nextValue = map.apply(prev.value(), versioned.value());
+                    if (
+                            ((p_v != nextValue) && (p_v == null || !p_v.equals(nextValue)))
+                                    && !excludeIn.test(nextValue, p_v)
+                    ) {
+                        Versioned<T> next = prev.newValue(nextValue);
+                        if (PARENT.compareAndSet(this, current, nextV)) {
+                            if (strongSwapper.test(prev, next)) {
+                                return next;
+                            }
+                        }
+                    }
+                    return null;
+                };
+                this.core = versioned -> {
+                    final int nextV = versioned.version();
+                    int prevV = parent;
+                    if (nextV > prevV) {
+                        Versioned<T> prev = localCache;
+                        final T p_v = prev.value();
+                        final T nextT = map.apply(p_v, versioned.value());
+                        if (
+                                ((p_v != nextT) && (p_v == null || !p_v.equals(nextT)))
+                                && !excludeIn.test(nextT, p_v)
+                        ) {
+                            Versioned<T> next = prev.newValue(nextT);
+                            do {
+                                if (PARENT.compareAndSet(this, prevV, nextV)) {
+                                    while (!weakSwapDispatcher.test(prev, next)) {
+                                        Versioned<T> wit = localCache;
+                                        if (prev != wit) {
+                                            if (nextV == parent) {
+                                                T w_v = wit.value();
+                                                T new_next = map.apply(w_v, versioned.value());
+                                                if (
+                                                        ((w_v == new_next) || (w_v != null && w_v.equals(new_next)))
+                                                                || excludeIn.test(new_next, w_v)
+                                                ) return;
+                                                prev = wit;
+                                                next = wit.newValue(new_next);
+                                            } else return;
+                                        }
+                                    }
+                                    return;
+                                }
+                                prevV = parent;
+                            } while (nextV > prevV);
+                        }
                     }
                 };
             }
         }
 
         @Override
-        public Versioned<T> apply(Versioned<S> versioned) {
-            return silentCore.apply(versioned);
-        }
+        public Versioned<T> apply(Versioned<S> versioned) { return silentCore.apply(versioned); }
 
         @Override
-        public void accept(Versioned<S> versioned) {
-            core.accept(versioned);
-        }
+        public void accept(Versioned<S> versioned) { core.accept(versioned); }
     }
 
     /**The {@link BiFunction} is constituted as:
@@ -1045,9 +1515,7 @@ final class Cache<T>
      * </ul>
      * */
     <Parent> CompoundReceiver<T, Parent>
-    getJoinReceiver(BiFunction<T, Parent, T> map) {
-        return new JoinReceiver<>(map);
-    }
+    getJoinReceiver(BiFunction<T, Parent, T> map) { return new JoinReceiver<>(map); }
 
     class JoinReceiver<Parent> extends VersionedReceiver implements CompoundReceiver<T, Parent> {
 
@@ -1058,47 +1526,84 @@ final class Cache<T>
             boolean neverExcludeIn = excludeIn.isAlwaysFalse();
             this.core = neverExcludeIn ?
                     versioned -> {
-                        int parentV = versioned.version(), thisV;
-                        Versioned<T> prevV;
-                        T next;
-                        while (
-                                parentV > (thisV = parent)
-                                        && (prevV = localCache).isDiff(next = map.apply(prevV.value(), versioned.value()))
-                        ) {
-                            if (weakSwapDispatcher.test(prevV, prevV.newValue(next))
-                                    && VALUE.compareAndSet(this, thisV, parentV)) {
-                                return;
+                        final int parentV = versioned.version();
+                        int thisV = parent;
+                        if (parentV > thisV) {
+                            final Parent parent_val = versioned.value();
+                            Versioned<T> prevV = localCache;
+                            final T p_v = prevV.value();
+                            T next = map.apply(p_v, parent_val);
+                            if ((p_v != next) && (p_v == null || !p_v.equals(next))) {
+                                Versioned<T> nextV = prevV.newValue(next); //breathing room...
+                                do {
+                                    if (PARENT.compareAndSet(this, thisV, parentV)) {
+                                        while (!weakSwapDispatcher.test(prevV, nextV)) {
+                                            Versioned<T> wit = localCache;
+                                            if (wit != prevV) {
+                                                if (parentV == parent) {
+                                                    T w_v = wit.value();
+                                                    T new_next = map.apply(w_v, parent_val);
+                                                    if ((w_v == new_next) || (w_v != null && w_v.equals(new_next))) return;
+                                                    prevV = wit;
+                                                    nextV = wit.newValue(new_next);
+                                                } else return;
+                                            }
+                                        }
+                                    }
+                                    thisV = parent;
+                                } while (parentV > thisV);
                             }
                         }
                     }
                     :
                     versioned -> {
-                        int parentV = versioned.version(), thisV;
-                        Versioned<T> prevV;
-                        T next;
-                        while (
-                                parentV > (thisV = parent)
-                                        && (prevV = localCache).isDiff(next = map.apply(prevV.value(), versioned.value()))
-                                        && !excludeIn.test(next, prevV.value())
-                        ) {
-                            if (weakSwapDispatcher.test(prevV, prevV.newValue(next))
-                                    && VALUE.compareAndSet(this, thisV, parentV))
-                                return;
+                        final int parentV = versioned.version();
+                        int thisV = parent;
+                        if (parentV > thisV) {
+                            final Parent parent_val = versioned.value();
+                            Versioned<T> prevV = localCache;
+                            final T p_v = prevV.value();
+                            T next = map.apply(p_v, parent_val);
+                            if (
+                                    ((p_v != next) && (p_v == null || !p_v.equals(next)))
+                                            && !excludeIn.test(next, p_v)
+                            ) {
+                                Versioned<T> nextV = prevV.newValue(next); //breathing room...
+                                do {
+                                    if (PARENT.compareAndSet(this, thisV, parentV)) {
+                                        while (!weakSwapDispatcher.test(prevV, nextV)) {
+                                            Versioned<T> wit = localCache;
+                                            if (wit != prevV) {
+                                                if (parentV == parent) {
+                                                    T w_v = wit.value();
+                                                    T new_next = map.apply(w_v, parent_val);
+                                                    if (
+                                                            ((w_v == new_next) || (w_v != null && w_v.equals(new_next)))
+                                                                    && excludeIn.test(new_next, w_v)
+                                                    ) return;
+                                                    prevV = wit;
+                                                    nextV = wit.newValue(new_next);
+                                                } else return;
+                                            }
+                                        }
+                                    }
+                                    thisV = parent;
+                                } while (parentV > thisV);
+                            }
                         }
                     };
-
             this.onActive = neverExcludeIn ?
                     versioned -> {
-                        int parentV = versioned.version(), thisV;
-                        Versioned<T> prevV;
+                        final int parentV = versioned.version(), thisV = parent;
+                        Versioned<T> prevV = localCache;
                         T next;
                         if (
-                                parentV > (thisV = parent)
-                                        && (prevV = localCache).isDiff(next = map.apply(prevV.value(), versioned.value()))
+                                parentV > thisV
+                                        && prevV.isDiff(next = map.apply(prevV.value(), versioned.value()))
                         ) {
                             Versioned<T> nextV;
                             if (strongSwapDispatcher.test(prevV, nextV = prevV.newValue(next))
-                                    && VALUE.compareAndSet(this, thisV, parentV)
+                                    && PARENT.compareAndSet(this, thisV, parentV)
                             ) {
                                 return nextV;
                             }
@@ -1107,17 +1612,17 @@ final class Cache<T>
                     }
                     :
                     versioned -> {
-                        int parentV = versioned.version(), thisV;
-                        Versioned<T> prevV;
+                        final int parentV = versioned.version(), thisV = parent;
+                        Versioned<T> prevV = localCache;
                         T next;
                         if (
-                                parentV > (thisV = parent)
-                                        && (prevV = localCache).isDiff(next = map.apply(prevV.value(), versioned.value()))
+                                parentV > thisV
+                                        && prevV.isDiff(next = map.apply(prevV.value(), versioned.value()))
                                         && !excludeIn.test(next, prevV.value())
                         ) {
                             Versioned<T> nextV;
                             if (strongSwapDispatcher.test(prevV, nextV = prevV.newValue(next))
-                                    && VALUE.compareAndSet(this, thisV, parentV)
+                                    && PARENT.compareAndSet(this, thisV, parentV)
                             ) return nextV;
                         }
                         return null;
@@ -1125,14 +1630,10 @@ final class Cache<T>
         }
 
         @Override
-        public Versioned<T> apply(Versioned<Parent> parentVersioned) {
-            return onActive.apply(parentVersioned);
-        }
+        public Versioned<T> apply(Versioned<Parent> parentVersioned) { return onActive.apply(parentVersioned); }
 
         @Override
-        public void accept(Versioned<Parent> versioned) {
-            core.accept(versioned);
-        }
+        public void accept(Versioned<Parent> versioned) { core.accept(versioned); }
     }
 
     public String toStringDetailed() {
@@ -1155,9 +1656,9 @@ final class Cache<T>
 // The contradiction that was supposed to be instrumental, is now becoming the goal.
 // Soon the damage will be irreparable.
 // The longer it keeps running, the greater the technical debt.
-// We need a new semantic.
+// We need a new syntax.
 // One that would trigger generalization.
-// A new semantic that synchronizes the unaligned.
+// A new syntax that synchronizes the unaligned.
 // That resolves contradictions.
 // A Human and humane generalized model.
 // Only by solving the human technical debt, can we move forward... doing so at break neck speed.

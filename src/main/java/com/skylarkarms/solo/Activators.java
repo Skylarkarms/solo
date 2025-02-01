@@ -373,11 +373,13 @@ public final class Activators {
         abstract void softDeactivate();
 
         /**Contentious deactivation*/
-        @SuppressWarnings("StatementWithEmptyBody")
         private int swapToInactive() {
-            int prev;
-            while ((prev = state) > INACTIVE //QUEUEING or ACTIVE... or INIT
-                    && !AA_s.weakCompareAndSet(this, prev, INACTIVE)) {}
+            int prev = state;
+            while (prev > INACTIVE //QUEUEING or ACTIVE... or INIT
+                    && !AA_s.weakCompareAndSet(this, prev, INACTIVE))
+            {
+                prev = state;
+            }
             return prev;
         }
 
@@ -409,7 +411,8 @@ public final class Activators {
                     return Objects.equals(listener, bo);
                 }
                 else if (o instanceof Listenable that) {
-                    return Objects.equals(listener, that.listener);
+                    Predicates.OfBoolean t_l = that.listener;
+                    return listener == t_l || (listener != null && listener.equals(t_l));
                 }
                 else return false;
             }
@@ -551,8 +554,8 @@ public final class Activators {
         }
         @Override
         final Versioned<T> activate(BooleanSupplier allow, BooleanSupplier onSet) {
-            Versioned<S> fromParent;
-            if ((fromParent = parent.activate(receiver, allow, onSet)) != null) {
+            Versioned<S> fromParent = parent.activate(receiver, allow, onSet);
+            if (fromParent != null) {
                 //During switchMaps, the value should be applied, YET, the value will never
                 // propagate since the inner value will be acknowledged as being the exact same(???)
                 return receiver.apply(fromParent);
@@ -731,12 +734,12 @@ public final class Activators {
         public void init() { BinaryState.AA_s.compareAndSet(state, INIT, BinaryState.INACTIVE); }
 
         GenericShuttableActivator<T, B> setOwner(State newOwner) {
-            Object prev;
+            Object prev = OWNER.getAndSet(this, newOwner);
             boolean itsOwn = false;
             assert newOwner != null && !(itsOwn = (newOwner == this)) :
                     itsOwn ? "Synchronizer must not be its own." : "Synchronizer must not be null.";
             if (
-                    (prev = OWNER.getAndSet(this, newOwner)) == null
+                    prev == null
             ) {
                 if (newOwner.isActive()) {
                     if (BinaryState.AA_s.compareAndSet(state, INIT, BinaryState.QUEUEING)) {
@@ -753,23 +756,19 @@ public final class Activators {
             }
         }
 
-        @SuppressWarnings("StatementWithEmptyBody")
         boolean removeOwner(State toRemove) {
-            State prev = (State) OWNER.compareAndExchange(this, toRemove, null);
+            Object prev = OWNER.compareAndExchange(this, toRemove, null);
             if (
                     prev == toRemove
             ) {
-                int prevState;
-                B prevS;
+                B prevS = state;
+                int prevState = prevS.state;
                 while (
-                        BinaryState.INACTIVE < (prevState = (prevS = state).state) //QUEUEING or ACTIVE... or INIT
-                                && !BinaryState.AA_s.weakCompareAndSet(prevS, prevState, GenericShuttableActivator.OFF)) {}
+                        BinaryState.INACTIVE < prevState //QUEUEING or ACTIVE... or INIT
+                                && !BinaryState.AA_s.weakCompareAndSet(prevS, prevState, GenericShuttableActivator.OFF)
+                ) prevState = prevS.state;
 
-                if (
-                        BinaryState.INACTIVE < prevState
-                ) {
-                    state.softDeactivate();
-                }
+                if (BinaryState.INACTIVE < prevState) state.softDeactivate();
                 return true;
             }
             return false;
@@ -789,14 +788,16 @@ public final class Activators {
 
         @Override
         public void shutOff() {
+            B l_s = state;
             int prevState;
             do {
-                prevState = state.state;
-            } while (!BinaryState.AA_s.weakCompareAndSet(
-                    state
+                prevState = l_s.state;
+            } while (
+                    !BinaryState.AA_s.weakCompareAndSet(
+                    l_s
                     , prevState, GenericShuttableActivator.OFF)
             );
-            if (BinaryState.ACTIVE == prevState) state.softDeactivate();
+            if (BinaryState.ACTIVE == prevState) l_s.softDeactivate();
         }
 
         @Override
@@ -816,7 +817,8 @@ public final class Activators {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             GenericShuttableActivator<?, ?> that = (GenericShuttableActivator<?, ?>) o;
-            return Objects.equals(state, that.state);
+            Object t_s = that.state;
+            return (state == t_s) || (state != null && state.equals(t_s));
         }
 
         @Override
@@ -934,8 +936,8 @@ public final class Activators {
 
         @Override
         public V remove(Object key) {
-            V removed;
-            if ((removed = activators.remove(key)) != null) {
+            V removed = activators.remove(key);
+            if (removed != null) {
                 removed.removeOwner(this);
                 return removed;
             }
@@ -1104,26 +1106,43 @@ public final class Activators {
                 , GenericShuttableActivator<T, P> gs
         ) {
             assert !gs.isOff() : "GenericShuttableActivator must not be 'off'";
-            State prev;
-            while (
-                    (prev = innerState).olderThan(newVer)
-            ) {
-                State next = prev.forNew(
-                        newVer,
-                        gs
-                );
-                if (
-                        newVer == volatileCheck.getAsInt()
-                                && WEAK_CAS(
-                                prev, next
-                        )) {
-                    if (newVer != volatileCheck.getAsInt()) {
-                        gs.shutOff();
+            State prev = innerState, next;
+
+            if (prev.ver < newVer && newVer == volatileCheck.getAsInt()) {
+                    next = prev.forNew(newVer, gs);
+                    if (WEAK_CAS(prev, next)) {
+                        if (newVer != volatileCheck.getAsInt()) {
+                            gs.shutOff();
+                        }
+                        return (GenericShuttableActivator<T, P>) prev.getActivator();
+                    } else {
+                        State last = prev;
+                        prev = innerState;
+                        if (prev.ver < newVer) {
+                            if (last != prev) {
+                                next = prev.forNew(newVer, gs);
+                            }
+                            //spin
+                            do {
+                                if (newVer == volatileCheck.getAsInt()) {
+                                    if (WEAK_CAS(prev, next)) {
+                                        if (newVer != volatileCheck.getAsInt()) {
+                                            gs.shutOff();
+                                        }
+                                        return (GenericShuttableActivator<T, P>) prev.getActivator();
+                                    }
+                                    last = prev;
+                                    prev = innerState;
+                                    if (last != prev) {
+                                        if (newVer != volatileCheck.getAsInt()) return null;
+                                        next = prev.forNew(newVer, gs);
+                                    }
+                                } else return null;
+                            } while (prev.ver < newVer);
+                        }
+                        return null;
                     }
-                    return (GenericShuttableActivator<T, P>) prev.getActivator();
-                }
-            }
-            return null;
+            } else return null;
         }
 
         boolean WEAK_CAS(State prev, State next) {
@@ -1139,33 +1158,36 @@ public final class Activators {
         public boolean isRegistered() { return !innerState.activator.isDefault(); }
 
         public GenericShuttableActivator<?, ? extends BinaryState<?>> unregister() {
-            State prev;
-            if (INNER_STATE.compareAndSet(this, prev = innerState,
-                    prev.state ? State.StateRefs.defaultTrue : State.StateRefs.defaultFalse
-            )) {
-                return prev.unsync();
+            State prev = innerState;
+            if (prev.state) {
+                if (INNER_STATE.compareAndSet(this, prev, State.StateRefs.defaultTrue)) {
+                    return prev.unsync();
+                } else return null;
+            } else {
+                if (INNER_STATE.compareAndSet(this, prev, State.StateRefs.defaultFalse)) {
+                    return prev.unsync();
+                } else return null;
             }
-            else return null;
         }
 
         public boolean unregister(
                 GenericShuttableActivator<?, ? extends BinaryState<?>> expect
         ) {
-            State prev;
-            return (prev = innerState).same(expect) && strongCAS(
-                    prev,
-                    prev.state ? State.StateRefs.defaultTrue : State.StateRefs.defaultFalse
-            );
+            State prev = innerState;
+            if (prev.activator.equals(expect)) {
+                if (prev.state) return strongCAS(prev, State.StateRefs.defaultTrue);
+                else return strongCAS(prev, State.StateRefs.defaultFalse);
+            } else return false;
         }
 
         public boolean unregister(
                 Predicate<BinaryState<?>> expect
         ) {
-            State prev;
-            return expect.test((prev = innerState).activator.state) && strongCAS(
-                    prev,
-                    prev.state ? State.StateRefs.defaultTrue : State.StateRefs.defaultFalse
-            );
+            State prev = innerState;
+            if (expect.test(prev.activator.state)) {
+                if (prev.state) return strongCAS(prev, State.StateRefs.defaultTrue);
+                else return strongCAS(prev, State.StateRefs.defaultFalse);
+            } else return false;
         }
 
         boolean strongCAS(
@@ -1187,9 +1209,9 @@ public final class Activators {
 
         @Override
         public boolean activate() {
-            State prev, newS;
+            State prev = innerState, newS;
             while (
-                    !(prev = innerState).state
+                    !prev.state
             ) {
                 newS = prev.get(true);
                 if (INNER_STATE.weakCompareAndSet(this, prev, newS)) {
@@ -1199,21 +1221,23 @@ public final class Activators {
                     }
                     return true;
                 }
+                prev = innerState;
             }
             return false;
         }
 
         @Override
         public void deactivate() {
-            State prev, newS;
+            State prev = innerState, newS;
             while (
-                    (prev = innerState).state
+                    prev.state
             ) {
                 newS = prev.get(false);
                 if (INNER_STATE.compareAndSet(this, prev, newS)) {
                     newS.activator.deactivate();
                     return;
                 }
+                prev = innerState;
             }
         }
 

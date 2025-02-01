@@ -287,8 +287,8 @@ public abstract class Path<T>
      */
     public abstract <S> Path<S> switchMap(Builder<S> builder, Function<T, Path<S>> map);
 
-    public <S> Path<S> switchMap(UnaryOperator<Builder<S>> builderOperator, Function<T, Path<S>> map) {
-        return switchMap(builderOperator.apply(new Builder<>()), map);
+    public <S> Path<S> switchMap(Consumer<Builder<S>> builderOperator, Function<T, Path<S>> map) {
+        return switchMap(Builder.getNew(builderOperator), map);
     }
 
     /**
@@ -397,8 +397,8 @@ public abstract class Path<T>
         return openSwitchMap(Builder.getDefault(), map, onSwap, Predicates.OfBoolean.Consumer.getDefault());
     }
 
-    public <S> Path<S> openSwitchMap(UnaryOperator<Builder<S>> builderOperator, Function<T, Path<S>> map, OnSwapped<S> onSwap) {
-        return openSwitchMap(builderOperator.apply(new Builder<>()), map, onSwap, Predicates.OfBoolean.Consumer.getDefault());
+    public <S> Path<S> openSwitchMap(Consumer<Builder<S>> builderOperator, Function<T, Path<S>> map, OnSwapped<S> onSwap) {
+        return openSwitchMap(Builder.getNew(builderOperator), map, onSwap, Predicates.OfBoolean.Consumer.getDefault());
     }
 
     /**Forks a new Path that will get populated with the incoming emissions If the test returns true.*/
@@ -520,29 +520,46 @@ public abstract class Path<T>
         }
 
         @SuppressWarnings("unchecked")
-        static<T> Builder<T> applyBuilder(UnaryOperator<Builder<T>> op) {
-            return Lambdas.Identities.isIdentity(op) ? (Builder<T>)defaultBuilder.ref : op.apply(new Builder<>());
+        public static<T> Builder<T> getNew(Consumer<Builder<T>> op) {
+            if (Lambdas.Consumers.isEmpty(op)) {
+                return (Builder<T>)defaultBuilder.ref;
+            } else {
+                Builder<T> b = new Builder<>();
+                op.accept(b);
+                return b;
+            }
         }
 
-        boolean isDefault() { return this == defaultBuilder.ref || Objects.equals(this, defaultBuilder.ref); }
+        boolean isDefault() { return this == defaultBuilder.ref ||
+                this.equals(defaultBuilder.ref)
+//                Objects.equals(this, defaultBuilder.ref)
+                ; }
 
-        private static<T> boolean isDefaultOp(UnaryOperator<Builder<T>> builderOp) {
-            return builderOp == null || Lambdas.Identities.isIdentity(builderOp);
+        private static<T> boolean isDefaultOp(Consumer<Builder<T>> builderOp) {
+            return builderOp == null || Lambdas.Consumers.isEmpty(builderOp);
         }
 
         static<T> Builder<T> resolve(
                 T initialValue,
-                UnaryOperator<Builder<T>> builderOp
+                Consumer<Builder<T>> builderOp
         ) {
-            boolean defaultOp;
-            if ((defaultOp = isDefaultOp(builderOp)) && initialValue == null) return defaultBuilder.ref();
-            if (!defaultOp) {
+            boolean defaultOp = isDefaultOp(builderOp);
+
+            if (defaultOp) {
+                if (initialValue == null) return defaultBuilder.ref();
+                else return Builder.withValue(initialValue);
+            } else {
                 if (initialValue == null) {
-                    Builder<T> res;
-                    if ((res = builderOp.apply(new Builder<>())).isDefault()) return defaultBuilder.ref();
+                    Builder<T> res = new Builder<>();
+                    builderOp.accept(res);
+                    if (res.isDefault()) return defaultBuilder.ref();
                     else return res;
-                } else return builderOp.apply(Builder.withValue(initialValue));
-            } else return Builder.withValue(initialValue);
+                } else {
+                    Builder<T> res = Builder.withValue(initialValue);
+                    builderOp.accept(res);
+                    return res;
+                }
+            }
         }
 
         /**
@@ -663,7 +680,8 @@ public abstract class Path<T>
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             Builder<?> builder = (Builder<?>) o;
-            return Objects.equals(initialValue, builder.initialValue)
+            Versioned<?> i_v = builder.initialValue;
+            return ((initialValue == i_v) || (initialValue != null && ((Object) initialValue).equals(i_v)))
                     && Objects.equals(excludeIn, builder.excludeIn)
                     && Objects.equals(excludeOut, builder.excludeOut);
         }
@@ -755,7 +773,7 @@ public abstract class Path<T>
 
     public static class Impl<T> extends Path<T> {
         private final boolean concurrent = Settings.concurrent;
-        private final boolean debug_mode = Settings.debug_mode;
+        private final boolean debug_mode = Settings.DEBUG_MODE.ref;
 
         final Cache<T> cache;
         final ReceiversManager receiversManager;
@@ -776,9 +794,9 @@ public abstract class Path<T>
         @SuppressWarnings("unchecked")
         @Override
         final Path<T> assign(Ref<T> referent) {
-            Ref<T> prev = (Ref<T>) REF.getAndSet(this, referent.sysAlloc(this));
+            Object prev = REF.getAndSet(this, referent.sysAlloc(this));
             if (prev != null) {
-                prev.removeOwner(this);
+                ((Ref<T>)prev).removeOwner(this);
                 throw new IllegalStateException("This Path already had a reference = " + prev);
             }
             return this;
@@ -788,7 +806,7 @@ public abstract class Path<T>
 
         protected boolean weakSet(T set) { return cache.weakSet(set); }
 
-        private final LazyHolder.Supplier<Publisher<T>> publisherInstance = new LazyHolder.Supplier<>(
+        private final LazyHolder.Supplier<Publisher<T>> publisherInstance = LazyHolder.Supplier.getNew(
                 () -> new PublisherImpl(concurrent ? Settings.getExit_executor() : null)
         );
 
@@ -813,11 +831,10 @@ public abstract class Path<T>
 
         public boolean notStored() { return ref == null; }
 
-        @SuppressWarnings({"unchecked, unused"})
+        @SuppressWarnings({"unchecked", "unused"})
         public boolean deReference() {
-            Ref<T> prev;
-            return (prev = (Ref<T>) REF.getAndSet(this, null)) != null
-                    && prev.removeOwner(this);
+            Object prev = REF.getAndSet(this, null);
+            return prev != null && ((Ref<T>)prev).removeOwner(this);
         }
 
         @Override
@@ -834,8 +851,8 @@ public abstract class Path<T>
 
         @Override
         public <S> Path<S> openMap(Path.Builder<S> builder, Function<T, S> map, OnSwapped<S> onSwap, Predicates.OfBoolean.Consumer onActive) {
-            boolean notSwap;
-            if ((notSwap = onSwap.isDefault()) && onActive.isDefault()) {
+            boolean notSwap = onSwap.isDefault();
+            if (notSwap && onActive.isDefault()) {
                 return new Impl<>(builder, this, map);
             } else if (notSwap) { // no swap ... just onActive
                 return new Impl<>(
@@ -884,24 +901,24 @@ public abstract class Path<T>
                          The error may have occurred at one of the switchMaps of Path:
                         """;
 
+
         @Override
         public <S> Impl<S> switchMap(Path.Builder<S> builder, Function<T, Path<S>> map) {
             StackTraceElement[] es = debug_mode ? Thread.currentThread().getStackTrace() : null;
             return new SwappableActionablePath<>(builder) {
-                final BooleanSupplier obsIsActive = super::isActive;
                 final Impl<Path<S>> mapped = new Impl<>(Impl.this, map, Lambdas.BinaryPredicates.defaultFalse(), Predicates.defaultFalse()) {
                     @Override
                     protected void CASAttempt(boolean success, Versioned<Path<S>> prev, Versioned<Path<S>> current) {
                         if (success) {
-                            int curr;
-                            if ((curr = current.version()) == cache.getAsInt()) {
+                            int curr = current.version();
+                            if (curr == cache.getAsInt()) {
                                 Path<S> currentP = current.value();
                                 if (currentP != null) {
                                     if (
-                                            obsIsActive.getAsBoolean()
+                                            Impl.this.receiversManager.isActive()
                                     ) {
-                                        Activators.GenericShuttableActivator<S, Activators.PathedBinaryState<?, S>> prev_gs;
-                                        prev_gs = set(
+                                        Activators.GenericShuttableActivator<S, Activators.PathedBinaryState<?, S>>
+                                                prev_gs = set(
                                                 curr,
                                                 cache,
                                                 currentP
@@ -941,7 +958,6 @@ public abstract class Path<T>
         @Override
         public <S> Impl<S> openSwitchMap(Path.Builder<S> builder, Function<T, Path<S>> map, OnSwapped<S> onSwap, Predicates.OfBoolean.Consumer onActive) {
             return new SwappableActionablePath<>(builder) {
-                final BooleanSupplier obsIsActive = super::isActive;
                 final Impl<Path<S>> mapped = new Impl<>(
                         Builder.getDefault(), Impl.this, map) {
 
@@ -950,13 +966,14 @@ public abstract class Path<T>
                         if (success) {
                             if (current.version() == cache.getAsInt()) {
                                 Path<S> currentP = current.value();
-                                if (obsIsActive.getAsBoolean()) {
-                                    Activators.GenericShuttableActivator<S, Activators.PathedBinaryState<?, S>> next;
-                                    if ((next = set(current.version()
+                                if (
+                                        Impl.this.receiversManager.isActive()
+                                ) {
+                                    Activators.GenericShuttableActivator<S, Activators.PathedBinaryState<?, S>>
+                                            next = set(current.version()
                                             , cache
-                                            , currentP))
-                                            != null
-                                    ) {
+                                            , currentP);
+                                    if (next != null) {
                                         if (current.version() != cache.getAsInt()) {
                                             next.shutOff();
                                         }
@@ -995,10 +1012,8 @@ public abstract class Path<T>
         @Override
         public void remove(Consumer<? super T> observer) {
             getInstance().remove(observer);
-            Ref<T> current;
-            if ((current = ref) != null) {
-                current.removeRefObserver(observer);
-            }
+            Ref<T> current = ref;
+            if (current != null) current.removeRefObserver(observer);
         }
 
         @Override
@@ -1007,8 +1022,8 @@ public abstract class Path<T>
             return publisherInstance.get().contains(subscriber);
         }
 
-        private final LazyHolder.Supplier<Map<Object, PublisherImpl>> publishers = new LazyHolder.Supplier<>(
-                () -> new ConcurrentHashMap<>()
+        private final LazyHolder.Supplier<Map<Object, PublisherImpl>> publishers = LazyHolder.Supplier.getNew(
+                ConcurrentHashMap::new
         );
 
         private static final Object dummyExecutor = new Object();
@@ -1278,10 +1293,11 @@ public abstract class Path<T>
 
                 if (nonConcurrent) {
                     this.dispatcher = () -> {
-                        Versioned<T> versioned = cache.get();
-                        for (SubscriberWrapper<T> sub:subscribers.get()
-                        ) {
-                            sub.accept(versioned);
+                        final Versioned<T> versioned = cache.get();
+                        final SubscriberWrapper<T>[] wrappers = subscribers.get();
+                        int wl = wrappers.length;
+                        for (int i = 0; i < wl; i++) {
+                            wrappers[i].accept(versioned);
                         }
                     };
                 } else {
@@ -1292,9 +1308,9 @@ public abstract class Path<T>
                                 int next = versioned.version();
                                 SubscriberWrapper<T>[] subs = subscribers.get();
 
-                                final int lateLength;
+                                final int lateLength = subs.length;
 
-                                if (0 == (lateLength = subs.length)) return true; //end
+                                if (lateLength == 0) return true; //end
                                 if (next < cache.getAsInt()) return false; // retry
 
                                 for (int i = 0; i < lateLength; i++) {
@@ -1336,17 +1352,15 @@ public abstract class Path<T>
                     this.performConsumption = performConsumption;
                 }
 
-                @SuppressWarnings("StatementWithEmptyBody")
                 @Override
                 public void run() {
-                    int prev, next = versionedSupplier.getAsInt();
-                    boolean set = false;
-                    while (next > (prev = dispatchCount)
-                            &&
-                            !(set = VALUE_HANDLE.weakCompareAndSet(this, prev, next)))
-                    {}
-                    if (set) {
-                        performConsumption.run();
+                    int prev = dispatchCount, next = versionedSupplier.getAsInt();
+                    while (next > prev)
+                    {
+                        if (VALUE_HANDLE.weakCompareAndSet(this, prev, next)) {
+                            performConsumption.run();
+                            break;
+                        } else prev = dispatchCount;
                     }
                 }
 
@@ -1389,14 +1403,15 @@ public abstract class Path<T>
 
                 @Override
                 public void accept(Versioned<T> versioned) {
-                    int prev, next;
+                    int prev = version, next = versioned.version();
                     while (
-                            (prev = version) < (next = versioned.version())
+                            prev < next
                     ) {
                         if (VALUE_HANDLE.weakCompareAndSet(this, prev, next)) {
                             core.accept(versioned.value());
                             return;
                         }
+                        prev = version;
                     }
                 }
             }
@@ -1405,15 +1420,11 @@ public abstract class Path<T>
             public void add(Consumer<? super T> subscriber) {
                 SubscriberWrapper<T> wrapper = new SubscriberWrapper<>(subscriber);
                 if (subscribers.add(wrapper) == 0) {
-                    Versioned<T> next;
-                    if ((next = commenceActivation(strategy)) != null) {
-                        wrapper.accept(next);
-                    }
+                    Versioned<T> next = commenceActivation(strategy);
+                    if (next != null) wrapper.accept(next);
                 } else {
                     Versioned<T> versioned = cache.get();
-                    if (!versioned.isDefault()) {
-                        wrapper.accept(versioned);
-                    }
+                    if (!versioned.isDefault()) wrapper.accept(versioned);
                 }
             }
 
@@ -1456,7 +1467,7 @@ public abstract class Path<T>
             static<T> Cache.Receiver<T>[] getDefArr() { return (Cache.Receiver<T>[]) defaultReceivers; }
 
             private final Runnable optional_dispatcher;
-            private /*volatile*/ Runnable dispatcher = Lambdas.emptyRunnable();
+            private volatile Runnable dispatcher = Lambdas.emptyRunnable();
 
             Runnable getDispatcher() { return dispatcher; }
 
@@ -1467,9 +1478,8 @@ public abstract class Path<T>
                             Versioned<T> lateVersioned = cache.get();
                             int versions = lateVersioned.version();
                             Cache.Receiver<T>[] strats = receivers.getSnapshot();
-                            final int lateLength;
-
-                            if (0 == (lateLength = strats.length)) return true; // end
+                            final int lateLength = strats.length;
+                            if (lateLength == 0) return true; // end
                             if (versions < cache.getAsInt()) return false; //retry;
 
                             for (int i = 1; i < lateLength; i++) {
@@ -1484,16 +1494,17 @@ public abstract class Path<T>
                 this.optional_dispatcher = !concurrent ?
                         () -> {
                             Versioned<T> versioned = cache.get();
-                            for (Cache.Receiver<T> strat:getSubscriberStrategies()
-                            ) {
-                                strat.accept(versioned);
+                            Cache.Receiver<T>[] receivers = getSubscriberStrategies();
+                            int rl = receivers.length;
+                            for (int i = 0; i < rl; i++) {
+                                receivers[i].accept(versioned);
                             }
                         }
                         :
                         () -> {
-                            Cache.Receiver<T>[] subs;
-                            int length;
-                            if ((length = (subs = receivers.takePlainSnapshot()).length) > 0) {
+                            Cache.Receiver<T>[] subs = receivers.takePlainSnapshot();
+                            int length = subs.length;
+                            if (length > 0) {
                                 if (length > 1) executor.execute();
                                 subs[0].accept(cache.get());
                             }
@@ -1535,8 +1546,8 @@ public abstract class Path<T>
                 assert !receivers.contains(receiver) : "receiver " + receiver + " already contained in: " + Arrays.toString(getSubscriberStrategies());
                 int index = receivers.add(receiver, allow);
 
-                boolean greater;
-                if ((greater = index > -1) && onSet.getAsBoolean()) {
+                boolean greater = index > -1;
+                if (greater && onSet.getAsBoolean()) {
                     if (index == 0) {
                         this.dispatcher = optional_dispatcher;
                     }
@@ -1661,8 +1672,7 @@ public abstract class Path<T>
                 @SuppressWarnings("unchecked")
                 public static<T> Params<T> get(IntFunction<T[]> collector) {
                     T[] empty = collector.apply(0);
-                    Class<Object[]> clazz = (Class<Object[]>) empty.getClass();
-                    return (Params<T>) paramsSet.computeIfAbsent(clazz, aClass -> new Params<>(
+                    return (Params<T>) paramsSet.computeIfAbsent((Class<Object[]>) empty.getClass(), aClass -> new Params<>(
                             collector,
                             empty
                     ));
@@ -1711,8 +1721,8 @@ public abstract class Path<T>
             SwappableActivator() { this(Lambdas.BinaryPredicates.defaultFalse(), Lambdas.Predicates.defaultFalse()); }
 
             SwappableActivator(
-                    UnaryOperator<Path.Builder<T>> builder) {
-                this(Path.Builder.applyBuilder(builder));
+                    Consumer<Path.Builder<T>> builder) {
+                this(Path.Builder.getNew(builder));
             }
 
             SwappableActivator(
@@ -1849,15 +1859,14 @@ public abstract class Path<T>
                     , IntSupplier volatileCheck
                     , Path<T> path
             ) {
-                Activators.GenericShuttableActivator<T, Activators.PathedBinaryState<?, T>> gs = new Activators.GenericShuttableActivator<>(
-                        Activators.PathedBinaryState.get(Activators.GenericShuttableActivator.INIT,
-                                path, cache.hierarchicalIdentity()
-                        )
-                );
                 return sysRegister.register(
                         version
                         , volatileCheck
-                        , gs
+                        , new Activators.GenericShuttableActivator<>(
+                                Activators.PathedBinaryState.get(Activators.GenericShuttableActivator.INIT,
+                                        path, cache.hierarchicalIdentity()
+                                )
+                        )
                 );
             }
         }

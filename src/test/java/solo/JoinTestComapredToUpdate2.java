@@ -6,6 +6,7 @@ import com.skylarkarms.solo.Path;
 import utils.TestUtils;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -55,15 +56,31 @@ public class JoinTestComapredToUpdate2 {
         Print.purple.ln(TAG, " val = " + val + " res = " + intRes);
         Print.Timer chrono = new Print.Timer(Print.yellow);
         In.Consume<Integer>
-                a = new In.Consume<>(),
-                b = new In.Consume<>(),
+                a = new In.Consume<>(
+//                        Path.Builder.inExcluded(
+//                (next1, prev) -> Objects.equals(next1, prev)
+//        ),
+                In.Config.Consume.CONT()
+        ),
+                b = new In.Consume<>(Path.Builder.getNew(
+                        op -> {
+                            op.excludeIn((i1, i2) -> {
+                                return Objects.equals(i1, i2);
+                            });
+//                            return op;
+                        }
+                ), In.Config.Consume.BACK()),
                 c = new In.Consume<>(),
                 d = new In.Consume<>(),
                 e = new In.Consume<>();
 
         Path<Integer> res =
                 a.switchMap(iA ->
-                        b.switchMap(iB ->
+                        b.switchMap(
+                                builder -> {
+                                    builder.excludeIn((i1, i2) -> Objects.equals(i1, i2));
+                                },
+                                iB ->
                                 c.switchMap(iC ->
                                         d.switchMap(iD ->
                                                 e.map(iE ->

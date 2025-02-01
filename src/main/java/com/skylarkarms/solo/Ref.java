@@ -1,6 +1,7 @@
 package com.skylarkarms.solo;
 
 import com.skylarkarms.concur.LazyHolder;
+import com.skylarkarms.concur.Locks;
 import com.skylarkarms.concur.Versioned;
 import com.skylarkarms.lambdas.Exceptionals;
 import com.skylarkarms.lambdas.Lambdas;
@@ -155,7 +156,7 @@ public abstract class Ref<T>
     }
 
     private Ref(Storage storage) {
-        es = Settings.debug_mode ? Thread.currentThread().getStackTrace() : null;
+        es = Settings.DEBUG_MODE.ref ? Thread.currentThread().getStackTrace() : null;
         storage.add(this);
     }
 
@@ -436,11 +437,10 @@ public abstract class Ref<T>
 
         @Override
         <R extends Ref<T>> boolean removeOwner(Impl<T> owner) {
-            if (pathSupplier.destroy(owner)) {
+            if (pathSupplier.clear(owner)) {
                 completeRemoval(owner);
                 return true;
-            }
-            return false;
+            } else return false;
         }
 
         @Override
@@ -448,8 +448,8 @@ public abstract class Ref<T>
 
         @Override
         public boolean deReference() {
-            Impl<T> impl;
-            if ((impl = pathSupplier.getAndDestroy()) != null) {
+            Impl<T> impl = pathSupplier.getAndClear();
+            if (impl != null) {
                 impl.deref(this);
                 completeRemoval(impl);
                 return true;
@@ -471,10 +471,10 @@ public abstract class Ref<T>
         }
 
         /**
-         * @see Lazy#Lazy(com.skylarkarms.solo.Ref.Storage, com.skylarkarms.concur.LazyHolder.SpinnerConfig, java.util.function.Supplier)
+         * @see Lazy#Lazy(Storage, Locks.ExceptionConfig, Supplier)
          * */
         public<M extends Model> Lazy(
-                LazyHolder.SpinnerConfig config,
+                Locks.ExceptionConfig<RuntimeException> config,
                 Class<M> modelClass,
                 Function<M, Path<T>> pathFun
         ) {
@@ -500,11 +500,11 @@ public abstract class Ref<T>
         }
 
         /**
-         * @see Lazy#Lazy(com.skylarkarms.solo.Ref.Storage, com.skylarkarms.concur.LazyHolder.SpinnerConfig, java.util.function.Supplier)
+         * @see Lazy#Lazy(Storage, Locks.ExceptionConfig, Supplier)
          * */
         public<M extends Model> Lazy(
                 Storage storage,
-                LazyHolder.SpinnerConfig config,
+                Locks.ExceptionConfig<RuntimeException> config,
                 Class<M> modelClass,
                 Function<M, Path<T>> pathFun
         ) {
@@ -528,7 +528,7 @@ public abstract class Ref<T>
                 Supplier<Path<T>> pathSupplier
         ) {
             super(storage);
-            this.pathSupplier = new LazyHolder.Supplier<>(
+            this.pathSupplier = LazyHolder.Supplier.getNew(
                     () -> {
                         Path<T> p = pathSupplier.get();
                         p.assign(this);
@@ -538,12 +538,13 @@ public abstract class Ref<T>
         }
 
         /**
-         * Added functionality for {@link LazyHolder.SpinnerConfig}
+         * Added functionality for {@link Locks.ExceptionConfig}
          * @see Lazy#Lazy(com.skylarkarms.solo.Ref.Storage, java.util.function.Supplier)
          * */
         public<M extends Model.Live> Lazy(
                 Storage storage,
-                LazyHolder.SpinnerConfig config,
+                Locks.ExceptionConfig<RuntimeException> config,
+//                LazyHolder.SpinnerConfig config,
                 Supplier<Path<T>> pathSupplier
         ) {
             super(storage);

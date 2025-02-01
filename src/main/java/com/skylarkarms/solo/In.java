@@ -146,7 +146,7 @@ public class In<T>
         void up(UnaryOperator<T> u);
     }
 
-    private In(T initialValue, UnaryOperator<Builder<T>> builder) {
+    private In(T initialValue, Consumer<Builder<T>> builder) {
         this(
                 Builder.resolve(initialValue, builder)
         );
@@ -935,7 +935,7 @@ public class In<T>
 
         public Compute(
                 Config.Compute config,
-                T initialValue, UnaryOperator<Builder<T>> builder) {
+                T initialValue, Consumer<Builder<T>> builder) {
             this(
                     config,
                     Builder.resolve(
@@ -971,17 +971,17 @@ public class In<T>
     {
         private final Updater<T> strat;
 
-        public Update(T initialValue) { this(initialValue, Lambdas.Identities.identity()); }
+        public Update(T initialValue) { this(initialValue, Lambdas.Consumers.getDefaultEmpty()); }
         public Update(
                 T initialValue,
-                UnaryOperator<Builder<T>> builder) {
+                Consumer<Builder<T>> builder) {
             this(Config.Update.FORTH.ref, initialValue, builder);
         }
 
         public Update(
                 Config.Update config,
                 T initialValue,
-                UnaryOperator<Builder<T>> builder
+                Consumer<Builder<T>> builder
         ) {
             super(initialValue, builder);
             strat = config.apply(cache);
