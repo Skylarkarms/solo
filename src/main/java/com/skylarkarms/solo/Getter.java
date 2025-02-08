@@ -96,7 +96,7 @@ public class Getter<T>
         if (o == null || getClass() != o.getClass()) return false;
         Getter<?> getter = (Getter<?>) o;
         return !activator.isDiff(getter.activator.path())
-                && Objects.equals(map, getter.map);
+                && ((map == getter.map) || (map != null && map.equals(getter.map)));
     }
 
     @Override

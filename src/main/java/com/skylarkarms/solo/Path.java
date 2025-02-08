@@ -12,6 +12,7 @@ import com.skylarkarms.lambdas.Predicates;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.ConcurrentModificationException;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -531,9 +532,8 @@ public abstract class Path<T>
         }
 
         boolean isDefault() { return this == defaultBuilder.ref ||
-                this.equals(defaultBuilder.ref)
-//                Objects.equals(this, defaultBuilder.ref)
-                ; }
+                this.equals(defaultBuilder.ref);
+        }
 
         private static<T> boolean isDefaultOp(Consumer<Builder<T>> builderOp) {
             return builderOp == null || Lambdas.Consumers.isEmpty(builderOp);
@@ -751,6 +751,11 @@ public abstract class Path<T>
 
             @Override
             public void remove(Consumer<? super Object> observer) {}
+
+            @Override
+            public Consumer<? super Object> remove(Object subscriber) {
+                return null;
+            }
 
             @Override
             public boolean contains(Consumer<? super Object> subscriber) { return false; }
@@ -1014,6 +1019,14 @@ public abstract class Path<T>
             getInstance().remove(observer);
             Ref<T> current = ref;
             if (current != null) current.removeRefObserver(observer);
+        }
+
+        @Override
+        public Consumer<? super T> remove(Object subscriber) {
+            Consumer<? super T> res = getInstance().remove(subscriber);
+            Ref<T> current = ref;
+            if (current != null) current.removeRefObserver(res);
+            return res;
         }
 
         @Override
@@ -1395,7 +1408,7 @@ public abstract class Path<T>
                 @Override
                 public boolean equals(Object o) {
                     assert o instanceof Consumer;
-                    return Objects.equals(core, o);
+                    return (core == o) || (core != null && core.equals(o));
                 }
 
                 @Override
@@ -1430,12 +1443,23 @@ public abstract class Path<T>
 
             @Override
             public void remove(Consumer<? super T> subscriber) {
-                if (!contains(subscriber)) {
-                    throw new IllegalStateException("The subscriber [" + subscriber + "], was not contained by this publisher [" + this + "]");
-                }
-                if (subscribers.nonContRemove(subscriberWrapper -> subscriberWrapper.equals(subscriber))) {
-                    commenceDeactivation(strategy);
-                }
+                CopyOnWriteArray.Search<SubscriberWrapper<T>> res = subscribers.nonContRemove(subscriber);
+                if (res != null) {
+                    if (res.found()) {
+                        commenceDeactivation(strategy);
+                    } else throw new IllegalStateException("The subscriber [" + subscriber + "], was not contained by this publisher [" + this + "]");
+                } else throw new ConcurrentModificationException("Contention was found and the removal failed.");
+            }
+
+            @Override
+            public Consumer<? super T> remove(Object subscriber) {
+                CopyOnWriteArray.Search<SubscriberWrapper<T>> res = subscribers.nonContRemove(
+                        subscriber
+                );
+                if (res != null) {
+                    SubscriberWrapper<T> sub = res.find();
+                    return sub != null ? sub.core : null;
+                } else throw new ConcurrentModificationException("Use contentious removal instead.");
             }
 
             @Override
@@ -1529,8 +1553,7 @@ public abstract class Path<T>
             boolean addReceiver(Cache.Receiver<T> receiver) {
                 assert receiver != null : " Receiver cannot be null";
                 assert !receivers.contains(receiver) : "receiver " + receiver + " already contained in: " + Arrays.toString(getSubscriberStrategies());
-                int index = receivers.add(receiver);
-                boolean isFirst = index == 0;
+                boolean isFirst = receivers.add(receiver) == 0;
                 if (isFirst) {
                     this.dispatcher = optional_dispatcher;
                 }
@@ -1560,7 +1583,7 @@ public abstract class Path<T>
 //                  then the receiver will not be removed.
 //                    Printer.out.print(Printer.green, TAG, "It will fail... true index = " + index);
 //                }
-                    receivers.contentiousRemove(receiver);
+                    receivers.fastContentiousRemove(receiver);
                 }
                 return -1;
             }
@@ -1577,7 +1600,7 @@ public abstract class Path<T>
 
             /**@return true if this is the last receiver to be removed, this method is non-contentious, and it will try ONCE and not throw*/
             boolean nonContRemove(Cache.Receiver<T> strategy) {
-                boolean wasLast = receivers.nonContRemove(strategy);
+                boolean wasLast = receivers.fastNonContRemove(strategy) == 0;
                 if (wasLast) {
                     this.dispatcher = Lambdas.emptyRunnable();
                 }

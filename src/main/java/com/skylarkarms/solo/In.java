@@ -920,7 +920,7 @@ public class In<T>
      * This class will compute a {@link Callable} on a Thread defined in its {@link Config.Compute} configuration.
      * Contention will be automatically resolved.
      * */
-    public static final class Compute<T>
+    public static class Compute<T>
             extends In<T> implements InStrategy.ToBooleanConsumer.Computable<T> {
 
         final Computable<T> computable;

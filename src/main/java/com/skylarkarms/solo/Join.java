@@ -222,7 +222,7 @@ public class Join<T> extends Path.Impl<T> {
                  * */
                 String set(T o) {
                     S newO = map.apply(o);
-                    if (!Objects.equals(state, newO)) {
+                    if ((state != newO) && (state == null || !state.equals(newO))) {
                         state = newO;
                         return toStringFun.apply(newO);
                     }

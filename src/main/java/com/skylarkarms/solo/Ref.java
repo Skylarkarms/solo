@@ -55,7 +55,7 @@ public abstract class Ref<T>
         extends Path<T>
 {
     final StackTraceElement[] es;
-    private final Set<Consumer<? super T>> observers = ConcurrentHashMap.newKeySet();
+    private final Set<Object> observers = ConcurrentHashMap.newKeySet();
 
     public final boolean hasObservers() { return !observers.isEmpty(); }
 
@@ -117,20 +117,19 @@ public abstract class Ref<T>
         else throw new IllegalStateException("Observer already present in Reference");
     }
 
-    final boolean removeRefObserver(Consumer<? super T> observer) {
+    final boolean removeRefObserver(Object observer) {
         return observers.remove(observer);
     }
 
-    final Iterator<Consumer<? super T>> iterator() { return observers.iterator(); }
+    final Iterator<Object> iterator() { return observers.iterator(); }
 
-    @SuppressWarnings("unchecked")
     final boolean completeRemoval(Impl<T> removed) {
         removed.deref(this);
-        Consumer<? super T>[] clone = observers.toArray(new Consumer[0]);
+        Object[] clone = observers.toArray(new Object[0]);
         observers.clear();
-        for (Consumer<? super T> c:clone
-        ) {
-            removed.remove(c);
+        int cl = clone.length;
+        for (int i = 0; i < cl; i++) {
+            removed.remove(clone[i]);
         }
         return true;
     }
@@ -199,7 +198,7 @@ public abstract class Ref<T>
 
         @SuppressWarnings("unchecked")
         <R extends Ref<T>> R sysAlloc(Impl<T> owner) {
-            Impl<?> prev = (Impl<?>) OWNER.getAndSet(this, owner);
+            Object prev = OWNER.getAndSet(this, owner);
             assert prev == null
                     && owner.notStored()
                     : already_owned_error.concat(resolveStack());
@@ -208,9 +207,9 @@ public abstract class Ref<T>
 
         @SuppressWarnings("unchecked")
         public boolean deReference() {
-            Impl<T> removed;
-            if ((removed = (Impl<T>) OWNER.getAndSet(this, null)) != null) {
-                return completeRemoval(removed);
+            Object removed = OWNER.getAndSet(this, null);
+            if (removed != null) {
+                return completeRemoval((Impl<T>) removed);
             }
             return false;
         }
@@ -245,9 +244,9 @@ public abstract class Ref<T>
         public boolean clearObservers() {
             Impl<T> current = owner;
             if (current == null) return false;
-            Iterator<Consumer<? super T>> iter = iterator();
+            Iterator<Object> iter = iterator();
             while (iter.hasNext()) {
-                Consumer<? super T> value = iter.next();
+                Object value = iter.next();
                 current.remove(value);
                 iter.remove();
             }
@@ -269,6 +268,13 @@ public abstract class Ref<T>
             if (removeRefObserver(observer)) {
                 getPath().remove(observer);
             }
+        }
+
+        @Override
+        public Consumer<? super T> remove(Object subscriber) {
+            if (removeRefObserver(subscriber)) {
+                return getPath().remove(subscriber);
+            } else return null;
         }
 
         @Override
@@ -544,7 +550,6 @@ public abstract class Ref<T>
         public<M extends Model.Live> Lazy(
                 Storage storage,
                 Locks.ExceptionConfig<RuntimeException> config,
-//                LazyHolder.SpinnerConfig config,
                 Supplier<Path<T>> pathSupplier
         ) {
             super(storage);
@@ -576,9 +581,9 @@ public abstract class Ref<T>
         public boolean clearObservers() {
             Impl<T> liveGet = pathSupplier.getOpaque();
             if (liveGet == null) return false;
-            Iterator<Consumer<? super T>> iter = iterator();
+            Iterator<Object> iter = iterator();
             while (iter.hasNext()) {
-                Consumer<? super T> value = iter.next();
+                Object value = iter.next();
                 liveGet.remove(value);
                 iter.remove();
             }
@@ -610,6 +615,13 @@ public abstract class Ref<T>
             if (removeRefObserver(observer)) {
                 getPath().remove(observer);
             }
+        }
+
+        @Override
+        public Consumer<? super T> remove(Object subscriber) {
+            if (removeRefObserver(subscriber)) {
+                return getPath().remove(subscriber);
+            } else return null;
         }
 
         @Override

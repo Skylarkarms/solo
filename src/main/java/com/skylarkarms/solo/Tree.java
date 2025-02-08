@@ -390,6 +390,9 @@ public abstract class Tree<T, N extends Tree.Node<T, N>> {
         public void remove(Consumer<? super T> observer) { core.remove(observer); }
 
         @Override
+        public Consumer<? super T> remove(Object subscriber) { return core.remove(subscriber); }
+
+        @Override
         public boolean contains(Consumer<? super T> subscriber) { return core.contains(subscriber); }
 
         private UnaryOperator<T[]> func(T s, int forIndex) {

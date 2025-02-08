@@ -8,6 +8,7 @@ public interface Publisher<T> extends Activators.State {
      * a Path with the default parameters defined at Settings*/
     void add(Consumer<? super T> subscriber);
     void remove(Consumer<? super T> subscriber);
+    Consumer<? super T> remove(Object subscriber);
     boolean contains(Consumer<? super T> subscriber);
 
     @FunctionalInterface

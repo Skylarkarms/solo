@@ -69,7 +69,10 @@ public final class Activators {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             BaseActivator<?> that = (BaseActivator<?>) o;
-            return Objects.equals(publisher, that.publisher) && Objects.equals(mapped, that.mapped);
+            return
+                    ((publisher == that.publisher) || (publisher != null && publisher.equals(that.publisher)))
+                            &&
+                            ((mapped == that.mapped) || (mapped != null && mapped.equals(that.mapped)));
         }
 
         @Override
@@ -408,7 +411,7 @@ public final class Activators {
                 if (this == o) return true;
                 if (o == null) return false;
                 if (o instanceof Predicates.OfBoolean bo) {
-                    return Objects.equals(listener, bo);
+                    return (listener == bo) || (listener != null && listener.equals(bo));
                 }
                 else if (o instanceof Listenable that) {
                     Predicates.OfBoolean t_l = that.listener;

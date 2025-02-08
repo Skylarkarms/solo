@@ -1,14 +1,14 @@
 # solo
 
-[latest version] = `1.0.6`
+[latest version] = `1.0.7`
 
 [dependencies]: 
    - [`io.github.skylarkarms:lambdas:1.0.4`](https://github.com/Skylarkarms/Lambdas)
-   - [`io.github.skylarkarms:concur:1.0.9`](https://github.com/Skylarkarms/Concur)
+   - [`io.github.skylarkarms:concur:1.1.3`](https://github.com/Skylarkarms/Concur)
 
 [test dependencies]:
-   - [`io.github.skylarkarms:lambdaprofiler:1.0.6`](https://github.com/Skylarkarms/LambdaProfiler)
-   - [`io.github.skylarkarms:print:1.0.6`](https://github.com/Skylarkarms/Print)
+   - [`io.github.skylarkarms:lambdaprofiler:1.0.8`](https://github.com/Skylarkarms/LambdaProfiler)
+   - [`io.github.skylarkarms:print:1.0.7`](https://github.com/Skylarkarms/Print)
 
 <p align="center">
   <img src="solo_logo.svg" width="300" height="300">
