@@ -739,9 +739,7 @@ public abstract class Path<T>
             boolean isDiff(Path<?> that) { return that != ref; }
 
             @Override
-            Versioned<Object> activate(Cache.Receiver<Object> receiver, BooleanSupplier allow, BooleanSupplier onSet) {
-                return null;
-            }
+            Versioned<Object> activate(Cache.Receiver<Object> receiver, BooleanSupplier allow, BooleanSupplier onSet) { return null; }
 
             @Override
             public String toStringDetailed() { return null; }
@@ -750,15 +748,15 @@ public abstract class Path<T>
             public void add(Consumer<? super Object> observer) {}
 
             @Override
-            public void remove(Consumer<? super Object> observer) {}
-
-            @Override
             public Consumer<? super Object> remove(Object subscriber) {
                 return null;
             }
 
             @Override
-            public boolean contains(Consumer<? super Object> subscriber) { return false; }
+            public boolean contains(Object subscriber) { return false; }
+
+            @Override
+            public int observerSize() { return 0; }
 
             @Override
             public Publisher<Object> getPublisher(Executor executor) { return null; }
@@ -1015,24 +1013,28 @@ public abstract class Path<T>
         public void add(Consumer<? super T> observer) { getInstance().add(observer); }
 
         @Override
-        public void remove(Consumer<? super T> observer) {
-            getInstance().remove(observer);
-            Ref<T> current = ref;
-            if (current != null) current.removeRefObserver(observer);
-        }
-
-        @Override
         public Consumer<? super T> remove(Object subscriber) {
-            Consumer<? super T> res = getInstance().remove(subscriber);
-            Ref<T> current = ref;
-            if (current != null) current.removeRefObserver(res);
-            return res;
+            Publisher<T> p = publisherInstance.getOpaque();
+            if (p != null) {
+                Consumer<? super T> res = p.remove(subscriber);
+                if (res != null) {
+                    Ref<T> current = ref;
+                    if (current != null) current.removeRefObserver(res);
+                }
+                return res;
+            } else return null;
         }
 
         @Override
-        public boolean contains(Consumer<? super T> subscriber) {
-            if (publisherInstance.isNull()) return false;
-            return publisherInstance.get().contains(subscriber);
+        public boolean contains(Object subscriber) {
+            Publisher<T> p = publisherInstance.getOpaque();
+            return p != null && p.contains(subscriber);
+        }
+
+        @Override
+        public int observerSize() {
+            Publisher<T> p = publisherInstance.getOpaque();
+            return p == null ? 0 : p.observerSize();
         }
 
         private final LazyHolder.Supplier<Map<Object, PublisherImpl>> publishers = LazyHolder.Supplier.getNew(
@@ -1051,7 +1053,7 @@ public abstract class Path<T>
         @Override
         public Publisher<T> getPublisher(Executor executor) {
             return
-                    executor == Settings.getExit_executor() && concurrent ?
+                    concurrent && executor == Settings.getExit_executor() ?
                             getInstance()
                             : getPublisherFor(executor);
         }
@@ -1346,7 +1348,7 @@ public abstract class Path<T>
 
             private static final class VersionedExecutor implements Runnable, IntSupplier {
                 @SuppressWarnings("FieldMayBeFinal")
-                private /*volatile */int dispatchCount = 0;
+                private volatile int dispatchCount = 0;
                 private final IntSupplier versionedSupplier;
                 private final Runnable performConsumption;
                 private static final VarHandle VALUE_HANDLE;
@@ -1400,15 +1402,25 @@ public abstract class Path<T>
                     }
                 }
 
-                SubscriberWrapper(Consumer<? super T> core) { this.core = core; }
+                SubscriberWrapper(Consumer<? super T> core) {
+                    if (core == null) throw new IllegalArgumentException("Core cannot be null");
+                    this.core = core;
+                }
 
                 /**
                  * The array implementation must perform a proper equality
                  * */
                 @Override
                 public boolean equals(Object o) {
-                    assert o instanceof Consumer;
-                    return (core == o) || (core != null && core.equals(o));
+                    return ((o == core) || (o == this))
+                           || (
+                                   core.equals(o) // We should obey the doctrine of the CopyOnWriteArray
+                                   // class which dictates comparing THIS against the OUTER object first.
+                                   // Specially since the Wrapper is hidden within the package so the
+                                   // important thing to compare... is the actual `core` field.
+                                   ||
+                                   (o != null && o.equals(core))
+                           );
                 }
 
                 @Override
@@ -1442,29 +1454,25 @@ public abstract class Path<T>
             }
 
             @Override
-            public void remove(Consumer<? super T> subscriber) {
+            public Consumer<? super T> remove(Object subscriber) {
                 CopyOnWriteArray.Search<SubscriberWrapper<T>> res = subscribers.nonContRemove(subscriber);
                 if (res != null) {
-                    if (res.found()) {
-                        commenceDeactivation(strategy);
-                    } else throw new IllegalStateException("The subscriber [" + subscriber + "], was not contained by this publisher [" + this + "]");
-                } else throw new ConcurrentModificationException("Contention was found and the removal failed.");
-            }
-
-            @Override
-            public Consumer<? super T> remove(Object subscriber) {
-                CopyOnWriteArray.Search<SubscriberWrapper<T>> res = subscribers.nonContRemove(
-                        subscriber
-                );
-                if (res != null) {
                     SubscriberWrapper<T> sub = res.find();
-                    return sub != null ? sub.core : null;
+                    if (sub != null) {
+                        if (res.size() == 0) commenceDeactivation(strategy);
+                        return sub.core;
+                    } else return null;
                 } else throw new ConcurrentModificationException("Use contentious removal instead.");
             }
 
             @Override
-            public boolean contains(Consumer<? super T> subscriber) {
-                return subscribers.contains(tSubscriberWrapper -> tSubscriberWrapper.equals(subscriber));
+            public boolean contains(Object subscriber) {
+                return subscribers.contains(subscriber);
+            }
+
+            @Override
+            public int observerSize() {
+                return subscribers.size();
             }
 
             private void dispatch() { if (isActive()) dispatcher.run(); }

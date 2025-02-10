@@ -65,9 +65,14 @@ public abstract class Ref<T>
     @Override
     public abstract boolean deReference();
 
-    final boolean refContains(Consumer<? super T> observer) {
+    final boolean refContains(Object observer) {
         if (!isAssigned()) return false;
         return observers.contains(observer);
+    }
+
+    final int obsSize() {
+        if (!isAssigned()) return 0;
+        return observers.size();
     }
 
     /**
@@ -264,13 +269,6 @@ public abstract class Ref<T>
         }
 
         @Override
-        public void remove(Consumer<? super T> observer) {
-            if (removeRefObserver(observer)) {
-                getPath().remove(observer);
-            }
-        }
-
-        @Override
         public Consumer<? super T> remove(Object subscriber) {
             if (removeRefObserver(subscriber)) {
                 return getPath().remove(subscriber);
@@ -278,7 +276,10 @@ public abstract class Ref<T>
         }
 
         @Override
-        public boolean contains(Consumer<? super T> subscriber) { return refContains(subscriber); }
+        public boolean contains(Object subscriber) { return refContains(subscriber); }
+
+        @Override
+        public int observerSize() { return obsSize(); }
 
         @Override
         public <S> Path<S> map(Builder<S> builder, Function<T, S> map) { return getPath().map(builder, map); }
@@ -611,13 +612,6 @@ public abstract class Ref<T>
         }
 
         @Override
-        public void remove(Consumer<? super T> observer) {
-            if (removeRefObserver(observer)) {
-                getPath().remove(observer);
-            }
-        }
-
-        @Override
         public Consumer<? super T> remove(Object subscriber) {
             if (removeRefObserver(subscriber)) {
                 return getPath().remove(subscriber);
@@ -625,7 +619,10 @@ public abstract class Ref<T>
         }
 
         @Override
-        public boolean contains(Consumer<? super T> subscriber) { return refContains(subscriber); }
+        public boolean contains(Object subscriber) { return refContains(subscriber); }
+
+        @Override
+        public int observerSize() { return obsSize(); }
 
         @Override
         public <S> Path<S> switchMap(Builder<S> builder, Function<T, Path<S>> map) {

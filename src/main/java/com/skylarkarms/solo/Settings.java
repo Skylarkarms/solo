@@ -48,7 +48,11 @@ public final class Settings {
         work, exit
     }
 
+    private static volatile boolean execs_called;
     private record Execs() {
+        static {
+            execs_called = true;
+        }
         private static final ThreadFactory
                 workFactory = Executors.cleanFactory(Thread.MAX_PRIORITY)
                 , exitFactory = Executors.cleanFactory(Thread.MIN_PRIORITY);
@@ -90,9 +94,13 @@ public final class Settings {
         }
     }
 
-    public static Executor getWork_executor() { return Execs.work_executor; }
+    public static Executor getWork_executor() {
+        return execs_called ? Execs.work_executor : null;
+    }
 
-    public static Executor getExit_executor() { return Execs.exit_executor; }
+    public static Executor getExit_executor() {
+        return execs_called ? Execs.exit_executor : null;
+    }
 
     public static void setWork_executor(Executor work_executor) {
         if (!Execs.def_work_executor.isShutdown()) Execs.def_work_executor.shutdownNow();
@@ -156,13 +164,15 @@ public final class Settings {
         List<Runnable>[] runnables = new List[2];
         runnables[0] = new ArrayList<>();
         runnables[1] = new ArrayList<>();
-        if (Execs.work_executor instanceof ExecutorService) {
-            List<Runnable> working = ((ThreadPoolExecutor) Execs.work_executor).shutdownNow();
-            runnables[0].addAll(working);
-        }
-        if (Execs.exit_executor instanceof ExecutorService) {
-            List<Runnable> working = ((ThreadPoolExecutor) Execs.exit_executor).shutdownNow();
-            runnables[1].addAll(working);
+        if (execs_called) {
+            if (Execs.work_executor instanceof ExecutorService es) {
+                List<Runnable> working = es.shutdownNow();
+                runnables[0].addAll(working);
+            }
+            if (Execs.exit_executor instanceof ExecutorService es) {
+                List<Runnable> working = es.shutdownNow();
+                runnables[1].addAll(working);
+            }
         }
         return runnables;
     }
