@@ -75,7 +75,7 @@ repositories {
 
 dependencies {
     implementation 'io.github.skylarkarms:lambdas:1.0.4'
-    implementation 'io.github.skylarkarms:concur:1.1.3'
-    testImplementation 'io.github.skylarkarms:lambdaprofiler:1.0.8'
-    testImplementation 'io.github.skylarkarms:print:1.0.7'
+    implementation 'io.github.skylarkarms:concur:1.1.4'
+    testImplementation 'io.github.skylarkarms:lambdaprofiler:1.0.9'
+    testImplementation 'io.github.skylarkarms:print:1.0.8'
 }
